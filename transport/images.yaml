@@ -31,7 +31,8 @@ test-aliases:
   - alias: "zig"
     value: "zig-v0.0.1"
   - alias: "eth-p2p"
-    value: "eth-p2p-z-v0.0.1"
+    value: "eth-p2p
+-z-v0.0.1"
   - alias: "failing"
     value: ""
 
