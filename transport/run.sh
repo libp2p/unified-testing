@@ -250,6 +250,11 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# Re-derive paths from (possibly updated) CACHE_DIR
+# --cache-dir may have changed CACHE_DIR after init_common_variables set TEST_RUN_DIR
+export TEST_RUN_DIR="${CACHE_DIR}/test-run"
+init_cache_dirs
+
 # Generate test run key and test pass name
 export TEST_TYPE="transport"
 export TEST_RUN_KEY=$(compute_test_run_key \

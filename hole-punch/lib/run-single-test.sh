@@ -499,7 +499,7 @@ fi
 
 # Run the test
 log_debug "  Starting containers..."
-log_message "Running: ${TEST_NAME}" > "${LOG_FILE}"
+log_message "Running: ${TEST_NAME}"
 
 # Set timeout (180 seconds / 3 minutes for transport tests)
 TEST_TIMEOUT=180
@@ -519,7 +519,7 @@ else
         EXIT_CODE=1
         log_error "  ✗ Test timed out after ${TEST_TIMEOUT}s"
         echo "" >> "${LOG_FILE}"
-        log_error "Test timed out after ${TEST_TIMEOUT} seconds" >> "${LOG_FILE}"
+        log_error "Test timed out after ${TEST_TIMEOUT} seconds"
     else
         EXIT_CODE=1
         log_error "  ✗ Test failed"

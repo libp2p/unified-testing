@@ -57,6 +57,10 @@ init_common_variables() {
 
   # Execution settings
   WORKER_COUNT="${WORKER_COUNT:-$(get_cpu_count)}"
+  if [ "${WORKER_COUNT}" -gt 64 ]; then
+    echo "WARNING: Capping WORKER_COUNT from ${WORKER_COUNT} to 64" >&2
+    WORKER_COUNT=64
+  fi
   DEBUG="${DEBUG:-false}"
 
   # Common command-line flags
