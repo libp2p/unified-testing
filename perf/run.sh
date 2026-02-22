@@ -641,12 +641,10 @@ IMAGE_FILTER=$(cat "${REQUIRED_IMAGES}" | paste -sd'|' -)
 build_images_from_section "baselines" "${IMAGE_FILTER}" "${FORCE_IMAGE_REBUILD}"
 build_images_from_section "implementations" "${IMAGE_FILTER}" "${FORCE_IMAGE_REBUILD}"
 
-# Build Redis proxy image if any implementations are marked as legacy
-if yq eval '.implementations[] | select(.legacy == true) | .id' "${IMAGES_YAML}" 2>/dev/null | grep -q .; then
-  println
-  print_message "Legacy implementations detected, building Redis proxy..."
-  build_redis_proxy_image "${FORCE_IMAGE_REBUILD}"
-fi
+# Always build Redis proxy image (needed for legacy test compatibility)
+println
+print_message "Building Redis proxy image..."
+build_redis_proxy_image "${FORCE_IMAGE_REBUILD}"
 
 print_success "All images built successfully"
 
