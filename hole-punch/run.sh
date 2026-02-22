@@ -602,10 +602,10 @@ build_images_from_section "routers" "${IMAGE_IDS}" "${FORCE_IMAGE_REBUILD}"
 build_images_from_section "relays" "${IMAGE_IDS}" "${FORCE_IMAGE_REBUILD}"
 build_images_from_section "implementations" "${IMAGE_IDS}" "${FORCE_IMAGE_REBUILD}"
 
-# Build Redis proxy image if any legacy tests are selected
-if yq eval '.tests[] | select(.dialer.legacy == true or .listener.legacy == true) | .id' "${TEST_PASS_DIR}/test-matrix.yaml" 2>/dev/null | grep -q .; then
+# Build Redis proxy image if any implementations are marked as legacy
+if yq eval '.implementations[] | select(.legacy == true) | .id' "${IMAGES_YAML}" 2>/dev/null | grep -q .; then
   println
-  print_message "Legacy tests detected, building Redis proxy..."
+  print_message "Legacy implementations detected, building Redis proxy..."
   build_redis_proxy_image "${FORCE_IMAGE_REBUILD}"
 fi
 

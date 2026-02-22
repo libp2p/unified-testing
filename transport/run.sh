@@ -562,10 +562,10 @@ IMAGE_FILTER=$(cat "${REQUIRED_IMAGES}" | paste -sd'|' -)
 # Build images from implementations
 build_images_from_section "implementations" "${IMAGE_FILTER}" "${FORCE_IMAGE_REBUILD}"
 
-# Build Redis proxy image if any legacy tests are selected
-if yq eval '.tests[] | select(.dialer.legacy == true or .listener.legacy == true) | .id' "${TEST_PASS_DIR}/test-matrix.yaml" 2>/dev/null | grep -q .; then
+# Build Redis proxy image if any implementations are marked as legacy
+if yq eval '.implementations[] | select(.legacy == true) | .id' "${IMAGES_YAML}" 2>/dev/null | grep -q .; then
   println
-  print_message "Legacy tests detected, building Redis proxy..."
+  print_message "Legacy implementations detected, building Redis proxy..."
   build_redis_proxy_image "${FORCE_IMAGE_REBUILD}"
 fi
 
@@ -605,8 +605,14 @@ TEST_RESULTS_FILE="${TEST_PASS_DIR}/results.yaml.tmp"
 run_test() {
   local index="${1}"
   local name=$(yq eval ".tests[${index}].id" "${TEST_PASS_DIR}/test-matrix.yaml")
+  local slug=$(echo "${name}" | sed 's/[^a-zA-Z0-9-]/_/g')
+  local log_file="${TEST_PASS_DIR}/logs/${slug}.log"
 
   source "${SCRIPT_LIB_DIR}/lib-output-formatting.sh"
+
+  # Create log file BEFORE calling run-single-test.sh
+  # This ensures we always have a log even if the test script fails to start
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] INFO: Starting test: ${name}" > "${log_file}"
 
   # Run test using run-single-test.sh (now reads from test-matrix.yaml)
   # Results are written to results.yaml.tmp by the script
@@ -617,6 +623,22 @@ run_test() {
   else
     result="[FAILED]"
     exit_code=1
+    # If run-single-test.sh failed before creating its own log content,
+    # record the failure in the log file
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: Test script failed with exit code" >> "${log_file}"
+  fi
+
+  # If run-single-test.sh failed and no results entry was written, append a failure entry
+  if ! grep -q "name: ${name}" "${TEST_PASS_DIR}/results.yaml.tmp" 2>/dev/null; then
+    (
+      flock -x 200
+      cat >> "${TEST_PASS_DIR}/results.yaml.tmp" <<EOF
+  - name: ${name}
+    status: fail
+    duration: 0s
+    error: "test script failed to execute"
+EOF
+    ) 200>/tmp/results.lock
   fi
 
   # Serialize the message printing using flock (prevents interleaved output)

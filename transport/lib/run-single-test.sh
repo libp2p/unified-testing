@@ -47,7 +47,7 @@ print_debug "debug: ${DEBUG}"
 TEST_KEY=$(compute_test_key "${TEST_NAME}")
 TEST_SLUG=$(echo "${TEST_NAME}" | sed 's/[^a-zA-Z0-9-]/_/g')
 LOG_FILE="${TEST_PASS_DIR}/logs/${TEST_SLUG}.log"
-> "${LOG_FILE}"
+>> "${LOG_FILE}"
 
 print_debug "test key: ${TEST_KEY}"
 print_debug "test slug: ${TEST_SLUG}"
