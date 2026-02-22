@@ -376,7 +376,7 @@ jobs:
           force-image-rebuild: ${{ needs.resolve-perf-parameters.outputs.force-image-rebuild }}
           debug: ${{ needs.resolve-perf-parameters.outputs.debug }}
 
-  merge-and-commit-results:
+  merge-and-upload-results:
     needs: [run-transport-full, run-hole-punch-full, run-perf-full]
     if: |
       always() &&
@@ -387,9 +387,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
 
       - name: Download transport test results
         if: needs.run-transport-full.result != 'skipped'
@@ -413,14 +410,6 @@ jobs:
         with:
           pattern: perf-test-results-*
           path: /tmp/perf-results
-          merge-multiple: true
-
-      - name: Download perf box plots
-        if: needs.run-perf-full.result != 'skipped'
-        uses: actions/download-artifact@v4
-        with:
-          pattern: perf-test-box-plot-*
-          path: /tmp/perf-boxplots
           merge-multiple: true
 
       - name: Debug artifact structures
@@ -454,9 +443,6 @@ jobs:
             yq eval '.testResults[0]' "$PERF_YAML" 2>/dev/null || echo "No test results found"
           fi
 
-          echo ""
-          echo "=== Boxplot artifact ==="
-          find /tmp/perf-boxplots -name "*.png" -type f 2>/dev/null | head -10 || echo "No boxplots found"
 
       - name: Find result directories and prepare merge
         id: find-results
@@ -487,18 +473,13 @@ jobs:
           echo "hole-punch-dir=$HOLE_PUNCH_DIR" >> $GITHUB_OUTPUT
           echo "→ Hole-punch results: ${HOLE_PUNCH_DIR:-not found}"
 
-          # Find perf results directory (merge boxplots into it)
+          # Find perf results directory
           PERF_DIR=""
           if [ -d /tmp/perf-results ]; then
             if [ -f /tmp/perf-results/results.yaml ]; then
               PERF_DIR="/tmp/perf-results"
             else
               PERF_DIR=$(find /tmp/perf-results -name "results.yaml" -exec dirname {} \; | head -1)
-            fi
-            # Copy boxplots to perf results directory (use find to handle nested directories)
-            if [ -n "$PERF_DIR" ] && [ -d /tmp/perf-boxplots ]; then
-              echo "Copying boxplots to $PERF_DIR"
-              find /tmp/perf-boxplots -name "*.png" -type f -exec cp -v {} "$PERF_DIR/" \; 2>/dev/null || echo "No boxplots found"
             fi
           fi
           echo "perf-dir=$PERF_DIR" >> $GITHUB_OUTPUT
@@ -529,89 +510,73 @@ jobs:
       - name: Run merge-interop-results script
         shell: bash
         run: |
+          mkdir -p /tmp/merged-results
           WORKFLOW_RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
           bash lib/merge-interop-results.sh \
             "${{ steps.find-results.outputs.transport-dir }}" \
             "${{ steps.find-results.outputs.hole-punch-dir }}" \
             "${{ steps.find-results.outputs.perf-dir }}" \
-            "results/daily-full-interop.yml" \
+            "/tmp/merged-results/daily-full-interop.yml" \
             "$WORKFLOW_RUN_URL"
 
-      - name: Verify files to commit
+      - name: Verify merged results
         shell: bash
         run: |
-          echo "=== Files in results/ directory ==="
-          ls -la results/
-          echo ""
-          echo "=== Box plot files ==="
-          ls -la results/*.png 2>/dev/null || echo "No PNG files found"
+          echo "=== Merged results file ==="
+          ls -la /tmp/merged-results/daily-full-interop.yml
           echo ""
           echo "=== Generated YAML content preview ==="
-          head -100 results/daily-full-interop.yml
+          head -100 /tmp/merged-results/daily-full-interop.yml
 
-      - name: Commit and push combined results
+      - name: Install AWS CLI
         shell: bash
+        run: |
+          if ! command -v aws &> /dev/null; then
+            echo "Installing AWS CLI..."
+            curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+            unzip -q /tmp/awscliv2.zip -d /tmp/aws-install
+            /tmp/aws-install/aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli --update
+            rm -rf /tmp/awscliv2.zip /tmp/aws-install
+          fi
+          aws --version
+
+      - name: Upload results to Filebase
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.FILEBASE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.FILEBASE_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
         run: |
           set -euo pipefail
 
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          RESULTS_FILE="/tmp/merged-results/daily-full-interop.yml"
+          BUCKET="test-plans-results"
+          ENDPOINT="https://s3.filebase.com"
+          DATE_STAMP=$(date -u +"%Y-%m-%d")
 
-          # Check if there are changes to commit
-          git add results/
-
-          if git diff --cached --quiet 2>/dev/null; then
-            echo "→ No changes to commit"
-            exit 0
+          if [ ! -f "$RESULTS_FILE" ]; then
+            echo "Error: Results file not found at $RESULTS_FILE"
+            exit 1
           fi
 
-          git commit -m "chore: update combined interop results [skip ci]" \
-                     -m "Combined results from daily full interoperability test run." \
-                     -m "Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-                     -m "Co-authored-by: github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+          echo "Uploading results to Filebase S3..."
+          echo "  Bucket: $BUCKET"
+          echo "  Endpoint: $ENDPOINT"
+          echo "  Date stamp: $DATE_STAMP"
 
-          echo "→ Commit created successfully"
+          # Upload as date-stamped archive
+          echo "-> Uploading history/${DATE_STAMP}.yaml..."
+          aws s3 cp "$RESULTS_FILE" "s3://${BUCKET}/history/${DATE_STAMP}.yaml" \
+            --endpoint-url "$ENDPOINT" \
+            --content-type "application/x-yaml"
 
-          # Push with retry logic (handles race conditions)
-          MAX_ATTEMPTS=5
-          ATTEMPT=1
+          # Upload as latest results (overwrite)
+          echo "-> Uploading results.yaml (latest)..."
+          aws s3 cp "$RESULTS_FILE" "s3://${BUCKET}/results.yaml" \
+            --endpoint-url "$ENDPOINT" \
+            --content-type "application/x-yaml"
 
-          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
-            echo "→ Push attempt $ATTEMPT/$MAX_ATTEMPTS"
-
-            if git push origin master; then
-              echo "✓ Combined results committed and pushed successfully"
-              exit 0
-            else
-              echo "✗ Push failed (attempt $ATTEMPT/$MAX_ATTEMPTS)"
-
-              if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
-                echo "✗ Failed to push after $MAX_ATTEMPTS attempts"
-                exit 1
-              fi
-
-              echo "→ Pulling latest changes and rebasing..."
-
-              git fetch origin master
-              if git rebase origin/master; then
-                echo "✓ Rebase successful"
-              else
-                echo "✗ Rebase conflict detected, resolving..."
-                git checkout --ours results/ 2>/dev/null || true
-                git add results/
-                git rebase --continue || {
-                  echo "✗ Failed to resolve rebase conflict"
-                  git rebase --abort
-                  exit 1
-                }
-                echo "✓ Rebase conflict resolved"
-              fi
-
-              SLEEP_TIME=$((5 * (2 ** ($ATTEMPT - 1))))
-              echo "→ Waiting ${SLEEP_TIME}s before retry..."
-              sleep $SLEEP_TIME
-
-              ATTEMPT=$((ATTEMPT + 1))
-            fi
-          done
+          echo "Upload complete."
+          echo "  Archive: s3://${BUCKET}/history/${DATE_STAMP}.yaml"
+          echo "  Latest:  s3://${BUCKET}/results.yaml"

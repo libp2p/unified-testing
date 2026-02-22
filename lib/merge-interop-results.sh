@@ -8,7 +8,7 @@
 #   transport-dir   - Directory containing transport test results (results.yaml)
 #   hole-punch-dir  - Directory containing hole-punch test results (results.yaml)
 #   perf-dir        - Directory containing perf test results (results.yaml)
-#   output-file     - Output file path (default: results/daily-full-interop.yml)
+#   output-file     - Output file path (default: /tmp/daily-full-interop.yml)
 #   workflow-run-url - Optional GitHub Actions workflow run URL
 
 set -euo pipefail
@@ -17,7 +17,7 @@ set -euo pipefail
 TRANSPORT_DIR="${1:-}"
 HOLE_PUNCH_DIR="${2:-}"
 PERF_DIR="${3:-}"
-OUTPUT_FILE="${4:-results/daily-full-interop.yml}"
+OUTPUT_FILE="${4:-/tmp/daily-full-interop.yml}"
 WORKFLOW_RUN_URL="${5:-}"
 
 # Create output directory
@@ -286,47 +286,6 @@ EOF
 else
     echo "  No perf results found"
     echo "perf: null" >> "$OUTPUT_FILE"
-fi
-
-# Add box plot references
-echo "" >> "$OUTPUT_FILE"
-cat >> "$OUTPUT_FILE" << EOF
-box-plots:
-EOF
-
-# Copy box plot files if they exist
-BOX_PLOTS_FOUND=false
-if [ -n "$PERF_DIR" ] && [ -d "$PERF_DIR" ]; then
-    echo "  Looking for box plots in: $PERF_DIR"
-    ls -la "$PERF_DIR"/*.png 2>/dev/null || echo "  No PNG files found in PERF_DIR"
-
-    for plot_type in upload download latency; do
-        PLOT_FOUND=false
-        # Check for both naming conventions
-        for src_file in "$PERF_DIR/boxplot-${plot_type}.png" "$PERF_DIR/${plot_type}_boxplot.png"; do
-            if [ -f "$src_file" ]; then
-                dest_file="$OUTPUT_DIR/boxplot-${plot_type}.png"
-                cp "$src_file" "$dest_file"
-                echo "  ${plot_type}: \"boxplot-${plot_type}.png\"" >> "$OUTPUT_FILE"
-                echo "  Copied: $src_file -> $dest_file"
-                BOX_PLOTS_FOUND=true
-                PLOT_FOUND=true
-                break
-            fi
-        done
-        if [ "$PLOT_FOUND" = false ]; then
-            echo "  ${plot_type}: null" >> "$OUTPUT_FILE"
-        fi
-    done
-
-    # List what's in output dir
-    echo "  Files in $OUTPUT_DIR:"
-    ls -la "$OUTPUT_DIR"/*.png 2>/dev/null || echo "  No PNG files in output dir"
-else
-    echo "  upload: null" >> "$OUTPUT_FILE"
-    echo "  download: null" >> "$OUTPUT_FILE"
-    echo "  latency: null" >> "$OUTPUT_FILE"
-    echo "  No perf directory provided for box plots"
 fi
 
 echo ""
