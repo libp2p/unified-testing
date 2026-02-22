@@ -118,6 +118,12 @@ on:
         required: false
         default: false
         type: boolean
+      # Upload control
+      upload-results:
+        description: 'Upload merged results to Filebase S3 bucket'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   resolve-transport-parameters:
@@ -530,6 +536,7 @@ jobs:
           head -100 /tmp/merged-results/daily-full-interop.yml
 
       - name: Install AWS CLI
+        if: github.event_name != 'workflow_dispatch' || inputs.upload-results
         shell: bash
         run: |
           if ! command -v aws &> /dev/null; then
@@ -542,6 +549,7 @@ jobs:
           aws --version
 
       - name: Upload results to Filebase
+        if: github.event_name != 'workflow_dispatch' || inputs.upload-results
         shell: bash
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.FILEBASE_ACCESS_KEY_ID }}
