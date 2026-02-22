@@ -279,6 +279,11 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# Re-derive paths from (possibly updated) CACHE_DIR
+# --cache-dir may have changed CACHE_DIR after init_common_variables set TEST_RUN_DIR
+export TEST_RUN_DIR="${CACHE_DIR}/test-run"
+init_cache_dirs
+
 # Generate test run key and test pass name
 export TEST_TYPE="perf"
 export TEST_RUN_KEY=$(compute_test_run_key \
@@ -635,6 +640,11 @@ IMAGE_FILTER=$(cat "${REQUIRED_IMAGES}" | paste -sd'|' -)
 # Build images from both baselines and implementations
 build_images_from_section "baselines" "${IMAGE_FILTER}" "${FORCE_IMAGE_REBUILD}"
 build_images_from_section "implementations" "${IMAGE_FILTER}" "${FORCE_IMAGE_REBUILD}"
+
+# Always build Redis proxy image (needed for legacy test compatibility)
+println
+print_message "Building Redis proxy image..."
+build_redis_proxy_image "${FORCE_IMAGE_REBUILD}"
 
 print_success "All images built successfully"
 

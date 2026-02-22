@@ -1,32 +1,31 @@
-# Interoperability/end to end test-plans & performance benchmarking for libp2p
+# Unified interoperability, scaling, and performance testing framework for libp2p implementations
 
 [![Made by Protocol Labs](https://img.shields.io/badge/made%20by-Protocol%20Labs-blue.svg?style=flat-square)](http://protocol.ai)
 
 This repository contains:
-* interoperability tests for libp2p's transport layers modules across different implementations and versions
-* components to run performance benchmarks for different libp2p implementations
+* interoperability tests for libp2p's transport layers across different implementations and versions
+* performance tests for libp2p implementations measured against iperf, https, and quic-go baselines
+* hole-punching tests for libp2p implementations that support AutoNAT, Relaying, and DCUtR protocols
 
-## Transport Interop
-### Specs
-
-Please see our first specification for interoperability tests between transports, multiplexers, and secure channels here: [Transport Interoperability Test Specs](transport/README.md)
-
-More specs to come soon!
 
 ## History
 
-These test-plans historically used Testground. To read why we're now using `docker compose` instead please see: [Why we're moving away from Testground](https://github.com/libp2p/test-plans/issues/103)
+The original version of this testing framework can be found in the [old
+test-plans repo](https://github.com/libp2p/test-plans). Historically, the
+testing framework used Testground. That was later re-written in Node and used
+Docker. This new unified framework uses Bash and Docker to drive tests to work
+universally on Linux, macOS, and Windows with zero dependency maintenance. The
+Bash conventions followed in this repo can be found here:
+[docs/bash.md](docs/bash.md).
 
-## Performance Benchmarking
+## Documentation
 
-Please see the [benchmarking README](./perf#libp2p-performance-benchmarking).
-
-## Roadmap
-
-Our roadmap for test-plans can be found here: https://github.com/libp2p/test-plans/blob/master/ROADMAP.md
-
-It represents current projects the test-plans maintainers are focused on and provides an estimation of completion targets.
-It is complementary to those of [go-libp2p](https://github.com/libp2p/go-libp2p/blob/master/ROADMAP.md), [rust-libp2p](https://github.com/libp2p/rust-libp2p/blob/master/ROADMAP.md), [js-libp2p](https://github.com/libp2p/js-libp2p/blob/master/ROADMAP.md), and the [overarching libp2p project roadmap](https://github.com/libp2p/specs/blob/master/ROADMAP.md).
+The entire test framework is well documented in the `docs/` subfolder as well
+as in the Bash scripts themselves. If you are wanting to write a test
+application that is compatible with this test framework, there are docs on
+writing a [transport test](docs/write-a-transport-test-app.md), [perf
+test](docs/write-a-perf-test-app.md), and [hole punch
+test](docs/write-a-hole-punch-test-app.md).
 
 ## License
 

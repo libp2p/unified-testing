@@ -192,6 +192,16 @@ copy_config_files() {
       cp "${test_pass_dir}"/boxplot-*.png "${snapshot_dir}/" 2>/dev/null || true
     fi
 
+    # Copy log files
+    if [ -d "${test_pass_dir}/logs" ] && [ "$(ls -A "${test_pass_dir}/logs" 2>/dev/null)" ]; then
+      cp "${test_pass_dir}/logs/"* "${snapshot_dir}/logs/" 2>/dev/null || true
+    fi
+
+    # Copy docker-compose files
+    if [ -d "${test_pass_dir}/docker-compose" ] && [ "$(ls -A "${test_pass_dir}/docker-compose" 2>/dev/null)" ]; then
+      cp "${test_pass_dir}/docker-compose/"* "${snapshot_dir}/docker-compose/" 2>/dev/null || true
+    fi
+
     print_success "Copied configuration and results files"
   else
     print_success "Configuration and results already in place (same directory)"
@@ -218,6 +228,11 @@ copy_all_scripts() {
 
   # Copy global scripts to SAME lib/ directory
   cp ../lib/*.sh "${snapshot_dir}/lib/" 2>/dev/null || true
+
+  # Copy Redis proxy source if it exists (needed for legacy test support)
+  if [ -d "../lib/redis-proxy" ]; then
+    cp -r "../lib/redis-proxy" "${snapshot_dir}/lib/"
+  fi
 
   # Make all scripts executable
   chmod +x "${snapshot_dir}/lib/"*.sh 2>/dev/null || true
