@@ -23,13 +23,20 @@ start_redis_service() {
   # For perf, create with subnet to support static IP assignment
   if ! docker network inspect "${network_name}" &>/dev/null; then
     if [ "${network_name}" == "perf-network" ]; then
-      # Perf network needs subnet for static listener IP (10.5.0.10)
+      # Perf network: 10.8.0.0/16 (below hole-punch minimum of 10.32.0.0)
       docker network create "${network_name}" \
-        --subnet 10.5.0.0/24 \
-        --gateway 10.5.0.1 > /dev/null
+        --subnet 10.8.0.0/16 \
+        --gateway 10.8.0.1 > /dev/null
+    elif [ "${network_name}" == "transport-network" ]; then
+      # Transport network: 10.16.0.0/16 (below hole-punch minimum of 10.32.0.0)
+      docker network create "${network_name}" \
+        --subnet 10.16.0.0/16 \
+        --gateway 10.16.0.1 > /dev/null
     else
-      # Other networks don't need specific subnet
-      docker network create "${network_name}" > /dev/null
+      # Other shared networks (hole-punch, etc.): 10.24.0.0/16
+      docker network create "${network_name}" \
+        --subnet 10.24.0.0/16 \
+        --gateway 10.24.0.1 > /dev/null
     fi
     print_success "Created network: ${network_name}"
   else
@@ -69,6 +76,9 @@ start_redis_service() {
   unindent
   println
 
+  # Clean up orphaned _default networks from previous test runs
+  cleanup_orphaned_default_networks
+
   print_success "Global services ready"
 }
 
@@ -104,4 +114,21 @@ stop_redis_service() {
   println
 
   print_success "Global services stopped"
+}
+
+# Clean up orphaned _default networks left by Docker Compose projects
+# These accumulate from interrupted test runs or from before the default-network fix
+cleanup_orphaned_default_networks() {
+  local orphans
+  orphans=$(docker network ls --format '{{.Name}}' | grep '_default$' || true)
+  if [ -z "${orphans}" ]; then
+    return
+  fi
+  local count
+  count=$(echo "${orphans}" | wc -l)
+  print_message "Cleaning up ${count} orphaned _default network(s)..."
+  local net
+  while IFS= read -r net; do
+    docker network rm "${net}" >/dev/null 2>&1 || true
+  done <<< "${orphans}"
 }

@@ -32,8 +32,9 @@ init_common_variables() {
   SHUTDOWN=false
 
   # Host operating system detection
-  # Detect or use existing HOST_OS value (may be loaded from inputs.yaml)
-  HOST_OS="${HOST_OS:-$(detect_host_os)}"
+  # Always re-detect: HOST_OS is a runtime property of the current machine,
+  # not a reproducible config value (inputs.yaml may carry a stale value)
+  HOST_OS="$(detect_host_os)"
 
   # Files
   IMAGES_YAML="${IMAGES_YAML:-${TEST_ROOT}/images.yaml}"
@@ -56,6 +57,10 @@ init_common_variables() {
 
   # Execution settings
   WORKER_COUNT="${WORKER_COUNT:-$(get_cpu_count)}"
+  if [ "${WORKER_COUNT}" -gt 64 ]; then
+    echo "WARNING: Capping WORKER_COUNT from ${WORKER_COUNT} to 64" >&2
+    WORKER_COUNT=64
+  fi
   DEBUG="${DEBUG:-false}"
 
   # Common command-line flags
