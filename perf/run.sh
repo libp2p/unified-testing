@@ -219,7 +219,7 @@ Dependencies:
             Text utilities: awk, sed, grep, sort, head, tail, wc, tr, paste, cat
             File utilities: mkdir, cp, mv, rm, chmod, find, xargs, basename, dirname, mktemp
             System utilities: date, sleep, uname, hostname, ps
-  Optional: gnuplot (box plots), git (submodule-based builds)
+  Optional: git (submodule-based builds)
   Run with --check-deps to verify installation.
 
 EOF
@@ -894,8 +894,8 @@ println
 # STEP 10: GENERATE RESULTS DASHBOARD
 # -----------------------------------------------------------------------------
 # This creates the Markdown version for injecting into the README.md file for
-# this test. If `pandoc` is installed, an HTML version is gnerated. If
-# `gnuplot` is installed, box plot diagrams are also generated.
+# this test. If `pandoc` is installed, an HTML version is also generated.
+# Box plots are now rendered directly by the libp2p.io website.
 # =============================================================================
 
 # Generate results dashboard
@@ -911,23 +911,9 @@ print_success "Dashboard generation complete"
 unindent
 println
 
-# Generate box plots (optional - requires gnuplot)
-print_header "Generating box plots..."
-indent
-
-# Check if gnuplot is available
-if command -v gnuplot &> /dev/null; then
-  bash "${SCRIPT_DIR}/generate-boxplot.sh" "${TEST_PASS_DIR}/results.yaml" "${TEST_PASS_DIR}" || {
-    print_error "Box plot generation failed"
-  }
-else
-  print_error "gnuplot not found - skipping box plot generation"
-  indent
-  print_message "Install: apt-get install gnuplot"
-  unindent
-fi
-unindent
-println
+# NOTE: Box plot generation has been removed.
+# The libp2p.io website now renders box plots directly from the YAML data.
+# See: https://libp2p.io/status/#performance-benchmarks
 
 # =============================================================================
 # STEP 11: CREATE SNAPSHOT

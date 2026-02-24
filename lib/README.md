@@ -130,7 +130,6 @@ Standard utilities checked by the framework:
 - docker compose (either `docker compose` v2 plugin or legacy `docker-compose` command)
 
 #### Optional Tools
-- **gnuplot** 5.0+ (for performance visualization in perf tests)
 - **pandoc** (for HTML report generation)
 
 **Output**:
@@ -1077,7 +1076,6 @@ Standard utilities checked by the framework:
 - Sufficient disk space for images and caches
 
 ### Optional Tools
-- **gnuplot** 5.0+ (for performance visualization in perf tests)
 - **pandoc** (for HTML report generation)
 
 **Verify all dependencies**:
