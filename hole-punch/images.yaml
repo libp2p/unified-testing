@@ -4,6 +4,12 @@
 # Test Aliases - Define reusable patterns for test selection
 # Usage: --test-select "~linux" or --test-ignore "!~linux"
 test-aliases:
+  - alias: "all"
+    value: "~rust|~go"
+  - alias: "rust"
+    value: "rust-v0.56"
+  - alias: "go"
+    value: "go-v0.45"
   - alias: "failing"
     value: "rust-v0.56 x rust-v0.56"
 
@@ -26,6 +32,17 @@ relays:
     secureChannels: [noise, tls]
     muxers: [yamux, mplex]
 
+  # Go implements Circuit Relay v2 — the gold standard for DCUtR per the docs
+  - id: go-v0.45
+    source:
+      type: github
+      repo: libp2p/go-libp2p
+      commit: d0ecbf99a977f95428c72ec436b96ba17bbcfea0  # v0.45.0
+      dockerfile: test-plans/HolePunchDockerfile
+    transports: [tcp, quic-v1]
+    secureChannels: [noise, tls]
+    muxers: [yamux]
+
 # Implementation definitions
 implementations:
   - id: rust-v0.56
@@ -36,3 +53,14 @@ implementations:
     transports: [quic-v1, tcp, webrtc-direct, ws]
     secureChannels: [noise, tls]
     muxers: [yamux, mplex]
+
+  # go-libp2p v0.45 — robust, mature DCUtR implementation (see docs/overall-flow.md)
+  - id: go-v0.45
+    source:
+      type: github
+      repo: libp2p/go-libp2p
+      commit: d0ecbf99a977f95428c72ec436b96ba17bbcfea0  # v0.45.0
+      dockerfile: test-plans/HolePunchDockerfile
+    transports: [tcp, quic-v1]
+    secureChannels: [noise, tls]
+    muxers: [yamux]
