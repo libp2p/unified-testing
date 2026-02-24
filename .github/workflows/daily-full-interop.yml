@@ -124,6 +124,11 @@ on:
         required: false
         default: false
         type: boolean
+      export-docker-images:
+        description: 'Export Docker images in snapshot (enabled by default on schedule, disabled on manual)'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   resolve-transport-parameters:
@@ -331,6 +336,7 @@ jobs:
           test-ignore: '${{ needs.resolve-transport-parameters.outputs.test-ignore }}'
           cache-dir: /srv/cache
           snapshot: true
+          export-docker-images: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.export-docker-images == 'true' }}
           force-matrix-rebuild: ${{ needs.resolve-transport-parameters.outputs.force-matrix-rebuild }}
           force-image-rebuild: ${{ needs.resolve-transport-parameters.outputs.force-image-rebuild }}
           debug: ${{ needs.resolve-transport-parameters.outputs.debug }}
@@ -355,6 +361,7 @@ jobs:
           router-ignore: '${{ needs.resolve-hole-punch-parameters.outputs.router-ignore }}'
           cache-dir: /srv/cache
           snapshot: true
+          export-docker-images: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.export-docker-images == 'true' }}
           force-matrix-rebuild: ${{ needs.resolve-hole-punch-parameters.outputs.force-matrix-rebuild }}
           force-image-rebuild: ${{ needs.resolve-hole-punch-parameters.outputs.force-image-rebuild }}
           debug: ${{ needs.resolve-hole-punch-parameters.outputs.debug }}
@@ -378,6 +385,7 @@ jobs:
           iterations: '${{ needs.resolve-perf-parameters.outputs.iterations }}'
           cache-dir: /srv/cache
           snapshot: true
+          export-docker-images: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.export-docker-images == 'true' }}
           force-matrix-rebuild: ${{ needs.resolve-perf-parameters.outputs.force-matrix-rebuild }}
           force-image-rebuild: ${{ needs.resolve-perf-parameters.outputs.force-image-rebuild }}
           debug: ${{ needs.resolve-perf-parameters.outputs.debug }}
@@ -535,18 +543,10 @@ jobs:
           echo "=== Generated YAML content preview ==="
           head -100 /tmp/merged-results/daily-full-interop.yml
 
-      - name: Install AWS CLI
+      - name: Verify AWS CLI
         if: github.event_name != 'workflow_dispatch' || inputs.upload-results
         shell: bash
-        run: |
-          if ! command -v aws &> /dev/null; then
-            echo "Installing AWS CLI..."
-            curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
-            unzip -q /tmp/awscliv2.zip -d /tmp/aws-install
-            /tmp/aws-install/aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli --update
-            rm -rf /tmp/awscliv2.zip /tmp/aws-install
-          fi
-          aws --version
+        run: aws --version
 
       - name: Upload results to Filebase
         if: github.event_name != 'workflow_dispatch' || inputs.upload-results
