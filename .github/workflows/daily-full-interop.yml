@@ -118,6 +118,42 @@ on:
         required: false
         default: false
         type: boolean
+      # Misc parameters
+      misc-test-select:
+        description: '[Misc] Select specific tests (pipe-separated substrings)'
+        required: false
+        default: ''
+        type: string
+      misc-test-ignore:
+        description: '[Misc] Ignore specific tests (pipe-separated substrings)'
+        required: false
+        default: '~failing'
+        type: string
+      misc-protocol-select:
+        description: '[Misc] Select specific protocols (pipe-separated, e.g. "ping|echo")'
+        required: false
+        default: ''
+        type: string
+      misc-protocol-ignore:
+        description: '[Misc] Ignore specific protocols (pipe-separated substrings)'
+        required: false
+        default: ''
+        type: string
+      misc-force-matrix-rebuild:
+        description: '[Misc] Force test matrix regeneration'
+        required: false
+        default: false
+        type: boolean
+      misc-force-image-rebuild:
+        description: '[Misc] Force Docker image rebuilds'
+        required: false
+        default: false
+        type: boolean
+      misc-debug:
+        description: '[Misc] Enable debug mode'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   resolve-transport-parameters:
@@ -309,6 +345,66 @@ jobs:
             fi
           fi
 
+  resolve-misc-parameters:
+    runs-on: [self-hosted, linux, x64, ephemeral]
+    outputs:
+      test-select: ${{ steps.resolve.outputs.test-select }}
+      test-ignore: ${{ steps.resolve.outputs.test-ignore }}
+      protocol-select: ${{ steps.resolve.outputs.protocol-select }}
+      protocol-ignore: ${{ steps.resolve.outputs.protocol-ignore }}
+      force-matrix-rebuild: ${{ steps.resolve.outputs.force-matrix-rebuild }}
+      force-image-rebuild: ${{ steps.resolve.outputs.force-image-rebuild }}
+      debug: ${{ steps.resolve.outputs.debug }}
+      should-run-tests: ${{ steps.resolve.outputs.should-run-tests }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve misc parameters
+        id: resolve
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual trigger - use workflow inputs
+            echo "test-select=${{ github.event.inputs.misc-test-select }}" >> $GITHUB_OUTPUT
+            echo "test-ignore=${{ github.event.inputs.misc-test-ignore }}" >> $GITHUB_OUTPUT
+            echo "protocol-select=${{ github.event.inputs.misc-protocol-select }}" >> $GITHUB_OUTPUT
+            echo "protocol-ignore=${{ github.event.inputs.misc-protocol-ignore }}" >> $GITHUB_OUTPUT
+            echo "force-matrix-rebuild=${{ github.event.inputs.misc-force-matrix-rebuild }}" >> $GITHUB_OUTPUT
+            echo "force-image-rebuild=${{ github.event.inputs.misc-force-image-rebuild }}" >> $GITHUB_OUTPUT
+            echo "debug=${{ github.event.inputs.misc-debug }}" >> $GITHUB_OUTPUT
+            echo "should-run-tests=true" >> $GITHUB_OUTPUT
+            echo "→ Manual trigger: using workflow inputs for misc"
+          else
+            # Automatic trigger - check for changes in last 24 hours
+            CHANGES=$(git log --oneline --since="24 hours ago" -- "misc/**" | wc -l)
+            IMPLS_CHANGES=$(git log --oneline --since="24 hours ago" -- "misc/images.yaml" | wc -l)
+
+            echo "test-select=" >> $GITHUB_OUTPUT
+            echo "test-ignore=~failing" >> $GITHUB_OUTPUT
+            echo "protocol-select=" >> $GITHUB_OUTPUT
+            echo "protocol-ignore=~failing" >> $GITHUB_OUTPUT
+            echo "force-image-rebuild=false" >> $GITHUB_OUTPUT
+            echo "debug=false" >> $GITHUB_OUTPUT
+
+            if [ "$CHANGES" -gt 0 ]; then
+              echo "should-run-tests=true" >> $GITHUB_OUTPUT
+              if [ "$IMPLS_CHANGES" -gt 0 ]; then
+                echo "force-matrix-rebuild=true" >> $GITHUB_OUTPUT
+                echo "→ Automatic trigger: misc changes detected, images.yaml changed"
+              else
+                echo "force-matrix-rebuild=false" >> $GITHUB_OUTPUT
+                echo "→ Automatic trigger: misc changes detected"
+              fi
+            else
+              echo "should-run-tests=false" >> $GITHUB_OUTPUT
+              echo "force-matrix-rebuild=false" >> $GITHUB_OUTPUT
+              echo "→ Automatic trigger: no misc changes in last 24h"
+            fi
+          fi
+
   run-transport-full:
     needs: resolve-transport-parameters
     if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.resolve-transport-parameters.outputs.should-run-tests) }}
@@ -376,13 +472,36 @@ jobs:
           force-image-rebuild: ${{ needs.resolve-perf-parameters.outputs.force-image-rebuild }}
           debug: ${{ needs.resolve-perf-parameters.outputs.debug }}
 
+  run-misc-full:
+    needs: resolve-misc-parameters
+    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.resolve-misc-parameters.outputs.should-run-tests) }}
+    runs-on: [self-hosted, linux, x64, ephemeral]
+    continue-on-error: true
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run full misc protocol interop tests
+        uses: ./.github/actions/run-bash-misc-test
+        with:
+          test-select: '${{ needs.resolve-misc-parameters.outputs.test-select }}'
+          test-ignore: '${{ needs.resolve-misc-parameters.outputs.test-ignore }}'
+          protocol-select: '${{ needs.resolve-misc-parameters.outputs.protocol-select }}'
+          protocol-ignore: '${{ needs.resolve-misc-parameters.outputs.protocol-ignore }}'
+          cache-dir: /srv/cache
+          snapshot: true
+          force-matrix-rebuild: ${{ needs.resolve-misc-parameters.outputs.force-matrix-rebuild }}
+          force-image-rebuild: ${{ needs.resolve-misc-parameters.outputs.force-image-rebuild }}
+          debug: ${{ needs.resolve-misc-parameters.outputs.debug }}
+
   merge-and-commit-results:
-    needs: [run-transport-full, run-hole-punch-full, run-perf-full]
+    needs: [run-transport-full, run-hole-punch-full, run-perf-full, run-misc-full]
     if: |
       always() &&
       (needs.run-transport-full.result != 'skipped' ||
        needs.run-hole-punch-full.result != 'skipped' ||
-       needs.run-perf-full.result != 'skipped')
+       needs.run-perf-full.result != 'skipped' ||
+       needs.run-misc-full.result != 'skipped')
     runs-on: [self-hosted, linux, x64, ephemeral]
     steps:
       - name: Checkout code
@@ -421,6 +540,14 @@ jobs:
         with:
           pattern: perf-test-box-plot-*
           path: /tmp/perf-boxplots
+          merge-multiple: true
+
+      - name: Download misc test results
+        if: needs.run-misc-full.result != 'skipped'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: misc-test-results-*
+          path: /tmp/misc-results
           merge-multiple: true
 
       - name: Debug artifact structures
@@ -503,6 +630,27 @@ jobs:
           fi
           echo "perf-dir=$PERF_DIR" >> $GITHUB_OUTPUT
           echo "→ Perf results: ${PERF_DIR:-not found}"
+
+      - name: Copy misc results to repository
+        if: needs.run-misc-full.result != 'skipped'
+        shell: bash
+        run: |
+          MISC_RESULTS_FILE=""
+          if [ -d /tmp/misc-results ]; then
+            if [ -f /tmp/misc-results/results.yaml ]; then
+              MISC_RESULTS_FILE="/tmp/misc-results/results.yaml"
+            else
+              MISC_RESULTS_FILE=$(find /tmp/misc-results -name "results.yaml" | head -1)
+            fi
+          fi
+
+          if [ -n "$MISC_RESULTS_FILE" ] && [ -f "$MISC_RESULTS_FILE" ]; then
+            mkdir -p results
+            cp "$MISC_RESULTS_FILE" results/misc-daily.yml
+            echo "→ Copied misc results to results/misc-daily.yml"
+          else
+            echo "→ No misc results found, skipping"
+          fi
 
       - name: Verify merge script version
         shell: bash
