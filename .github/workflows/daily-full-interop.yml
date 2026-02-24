@@ -548,13 +548,24 @@ jobs:
         shell: bash
         run: aws --version
 
+      - name: Configure AWS credentials for Filebase
+        if: github.event_name != 'workflow_dispatch' || inputs.upload-results
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.FILEBASE_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.FILEBASE_SECRET_KEY }}
+          AWS_DEFAULT_REGION: us-east-1   # Filebase ignores region, but required
+        run: |
+          echo "AWS credentials exported as env vars"
+          aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+          aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+          aws configure set default.region $AWS_DEFAULT_REGION
+          aws configure list
+
       - name: Upload results to Filebase
         if: github.event_name != 'workflow_dispatch' || inputs.upload-results
         shell: bash
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.FILEBASE_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.FILEBASE_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1
+          AWS_EC2_METADATA_DISABLED: true
         run: |
           set -euo pipefail
 
@@ -575,14 +586,16 @@ jobs:
 
           # Upload as date-stamped archive
           echo "-> Uploading history/${DATE_STAMP}.yaml..."
-          aws s3 cp "$RESULTS_FILE" "s3://${BUCKET}/history/${DATE_STAMP}.yaml" \
-            --endpoint-url "$ENDPOINT" \
+          aws --endpoint "$ENDPOINT" \
+            s3 cp "$RESULTS_FILE" \
+            "s3://${BUCKET}/history/${DATE_STAMP}.yaml" \
             --content-type "application/x-yaml"
 
           # Upload as latest results (overwrite)
           echo "-> Uploading results.yaml (latest)..."
-          aws s3 cp "$RESULTS_FILE" "s3://${BUCKET}/results.yaml" \
-            --endpoint-url "$ENDPOINT" \
+          aws --endpoint "$ENDPOINT" \
+            s3 cp "$RESULTS_FILE" \
+            "s3://${BUCKET}/results.yaml" \
             --content-type "application/x-yaml"
 
           echo "Upload complete."
