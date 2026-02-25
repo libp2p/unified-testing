@@ -72,6 +72,7 @@ init_common_variables() {
   AUTO_YES="${AUTO_YES:-false}"
   FORCE_MATRIX_REBUILD="${FORCE_MATRIX_REBUILD:-false}"
   FORCE_IMAGE_REBUILD="${FORCE_IMAGE_REBUILD:-false}"
+  EXPORT_DOCKER_IMAGES="${EXPORT_DOCKER_IMAGES:-false}"
 
   # Export variables that child scripts and global functions need
   export SHUTDOWN
@@ -95,6 +96,7 @@ init_common_variables() {
   export AUTO_YES
   export FORCE_MATRIX_REBUILD
   export FORCE_IMAGE_REBUILD
+  export EXPORT_DOCKER_IMAGES
 }
 
 # Initialize caching directories

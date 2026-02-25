@@ -50,6 +50,8 @@ These variables are included for all test types:
 
 **Implementation Filtering (Two-Stage):**
 
+> `--image-select` and `--image-ignore` are aliases for `--impl-select` and `--impl-ignore` respectively.
+
 | Variable | Description |
 |----------|-------------|
 | `IMPL_SELECT` | Select implementations (empty = select all) |
