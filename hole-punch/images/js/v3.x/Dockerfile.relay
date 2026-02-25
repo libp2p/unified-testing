@@ -1,0 +1,11 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package.json ./
+RUN npm install --omit=dev
+
+COPY index.js ./
+
+# IS_RELAY=true is set by docker-compose at runtime
+ENTRYPOINT ["node", "index.js"]
