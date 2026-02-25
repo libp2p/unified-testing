@@ -592,7 +592,6 @@ jobs:
             yq eval '.testResults[0]' "$PERF_YAML" 2>/dev/null || echo "No test results found"
           fi
 
-
       - name: Find result directories and prepare merge
         id: find-results
         shell: bash
@@ -634,7 +633,7 @@ jobs:
           echo "perf-dir=$PERF_DIR" >> $GITHUB_OUTPUT
           echo "→ Perf results: ${PERF_DIR:-not found}"
 
-      - name: Copy misc results to repository
+      - name: Copy misc results to staging
         if: needs.run-misc-full.result != 'skipped'
         shell: bash
         run: |
@@ -648,9 +647,9 @@ jobs:
           fi
 
           if [ -n "$MISC_RESULTS_FILE" ] && [ -f "$MISC_RESULTS_FILE" ]; then
-            mkdir -p results
-            cp "$MISC_RESULTS_FILE" results/misc-daily.yml
-            echo "→ Copied misc results to results/misc-daily.yml"
+            mkdir -p /tmp/staging
+            cp "$MISC_RESULTS_FILE" /tmp/staging/misc-daily.yml
+            echo "→ Staged misc results to /tmp/staging/misc-daily.yml"
           else
             echo "→ No misc results found, skipping"
           fi
@@ -699,7 +698,7 @@ jobs:
           echo "=== Generated YAML content preview ==="
           head -100 /tmp/merged-results/daily-full-interop.yml
 
-      - name: Verify AWS CLI
+      - name: Install AWS CLI
         if: github.event_name != 'workflow_dispatch' || inputs.upload-results
         shell: bash
         run: aws --version
@@ -723,6 +722,23 @@ jobs:
         env:
           AWS_EC2_METADATA_DISABLED: true
         run: |
+          if ! command -v aws &> /dev/null; then
+            echo "Installing AWS CLI..."
+            curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+            unzip -q /tmp/awscliv2.zip -d /tmp/aws-install
+            /tmp/aws-install/aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli --update
+            rm -rf /tmp/awscliv2.zip /tmp/aws-install
+          fi
+          aws --version
+
+      - name: Upload results to Filebase
+        if: github.event_name != 'workflow_dispatch' || inputs.upload-results
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.FILEBASE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.FILEBASE_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+        run: |
           set -euo pipefail
 
           RESULTS_FILE="/tmp/merged-results/daily-full-interop.yml"
@@ -742,16 +758,14 @@ jobs:
 
           # Upload as date-stamped archive
           echo "-> Uploading history/${DATE_STAMP}.yaml..."
-          aws --endpoint "$ENDPOINT" \
-            s3 cp "$RESULTS_FILE" \
-            "s3://${BUCKET}/history/${DATE_STAMP}.yaml" \
+          aws s3 cp "$RESULTS_FILE" "s3://${BUCKET}/history/${DATE_STAMP}.yaml" \
+            --endpoint-url "$ENDPOINT" \
             --content-type "application/x-yaml"
 
           # Upload as latest results (overwrite)
           echo "-> Uploading results.yaml (latest)..."
-          aws --endpoint "$ENDPOINT" \
-            s3 cp "$RESULTS_FILE" \
-            "s3://${BUCKET}/results.yaml" \
+          aws s3 cp "$RESULTS_FILE" "s3://${BUCKET}/results.yaml" \
+            --endpoint-url "$ENDPOINT" \
             --content-type "application/x-yaml"
 
           echo "Upload complete."
