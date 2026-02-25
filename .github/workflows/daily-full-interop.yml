@@ -154,6 +154,11 @@ on:
         required: false
         default: false
         type: boolean
+      upload-results:
+        description: 'Upload results to S3 storage'
+        required: false
+        default: true
+        type: boolean
 
 jobs:
   resolve-transport-parameters:
@@ -494,7 +499,7 @@ jobs:
           force-image-rebuild: ${{ needs.resolve-misc-parameters.outputs.force-image-rebuild }}
           debug: ${{ needs.resolve-misc-parameters.outputs.debug }}
 
-  merge-and-commit-results:
+  merge-and-upload-results:
     needs: [run-transport-full, run-hole-punch-full, run-perf-full, run-misc-full]
     if: |
       always() &&
@@ -631,7 +636,7 @@ jobs:
           echo "perf-dir=$PERF_DIR" >> $GITHUB_OUTPUT
           echo "→ Perf results: ${PERF_DIR:-not found}"
 
-      - name: Copy misc results to repository
+      - name: Copy misc results to staging
         if: needs.run-misc-full.result != 'skipped'
         shell: bash
         run: |
@@ -645,9 +650,9 @@ jobs:
           fi
 
           if [ -n "$MISC_RESULTS_FILE" ] && [ -f "$MISC_RESULTS_FILE" ]; then
-            mkdir -p results
-            cp "$MISC_RESULTS_FILE" results/misc-daily.yml
-            echo "→ Copied misc results to results/misc-daily.yml"
+            mkdir -p /tmp/staging
+            cp "$MISC_RESULTS_FILE" /tmp/staging/misc-daily.yml
+            echo "→ Staged misc results to /tmp/staging/misc-daily.yml"
           else
             echo "→ No misc results found, skipping"
           fi
@@ -683,83 +688,68 @@ jobs:
             "${{ steps.find-results.outputs.transport-dir }}" \
             "${{ steps.find-results.outputs.hole-punch-dir }}" \
             "${{ steps.find-results.outputs.perf-dir }}" \
-            "results/daily-full-interop.yml" \
+            "/tmp/staging/daily-full-interop.yml" \
             "$WORKFLOW_RUN_URL"
 
-      - name: Verify files to commit
+      - name: Verify merged output
         shell: bash
         run: |
-          echo "=== Files in results/ directory ==="
-          ls -la results/
+          echo "=== Staged files ==="
+          ls -la /tmp/staging/ 2>/dev/null || echo "No staged files"
           echo ""
           echo "=== Box plot files ==="
-          ls -la results/*.png 2>/dev/null || echo "No PNG files found"
+          find /tmp/staging -name "*.png" -type f 2>/dev/null || echo "No PNG files found"
           echo ""
           echo "=== Generated YAML content preview ==="
-          head -100 results/daily-full-interop.yml
+          head -100 /tmp/staging/daily-full-interop.yml 2>/dev/null || echo "No YAML found"
 
-      - name: Commit and push combined results
+      - name: Upload results to S3
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.upload-results == 'true' }}
         shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.FILEBASE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.FILEBASE_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_URL: https://s3.filebase.com
+          S3_BUCKET: ${{ secrets.FILEBASE_BUCKET }}
         run: |
           set -euo pipefail
 
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          S3_PREFIX="interop-results/${TIMESTAMP}"
 
-          # Check if there are changes to commit
-          git add results/
+          echo "→ Uploading results to s3://${S3_BUCKET}/${S3_PREFIX}/"
 
-          if git diff --cached --quiet 2>/dev/null; then
-            echo "→ No changes to commit"
-            exit 0
+          # Upload main results YAML
+          if [ -f /tmp/staging/daily-full-interop.yml ]; then
+            aws s3 cp /tmp/staging/daily-full-interop.yml \
+              "s3://${S3_BUCKET}/${S3_PREFIX}/daily-full-interop.yml" \
+              --endpoint-url "${AWS_ENDPOINT_URL}"
+            echo "✓ Uploaded daily-full-interop.yml"
           fi
 
-          git commit -m "chore: update combined interop results [skip ci]" \
-                     -m "Combined results from daily full interoperability test run." \
-                     -m "Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-                     -m "Co-authored-by: github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+          # Upload misc results if present
+          if [ -f /tmp/staging/misc-daily.yml ]; then
+            aws s3 cp /tmp/staging/misc-daily.yml \
+              "s3://${S3_BUCKET}/${S3_PREFIX}/misc-daily.yml" \
+              --endpoint-url "${AWS_ENDPOINT_URL}"
+            echo "✓ Uploaded misc-daily.yml"
+          fi
 
-          echo "→ Commit created successfully"
-
-          # Push with retry logic (handles race conditions)
-          MAX_ATTEMPTS=5
-          ATTEMPT=1
-
-          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
-            echo "→ Push attempt $ATTEMPT/$MAX_ATTEMPTS"
-
-            if git push origin master; then
-              echo "✓ Combined results committed and pushed successfully"
-              exit 0
-            else
-              echo "✗ Push failed (attempt $ATTEMPT/$MAX_ATTEMPTS)"
-
-              if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
-                echo "✗ Failed to push after $MAX_ATTEMPTS attempts"
-                exit 1
-              fi
-
-              echo "→ Pulling latest changes and rebasing..."
-
-              git fetch origin master
-              if git rebase origin/master; then
-                echo "✓ Rebase successful"
-              else
-                echo "✗ Rebase conflict detected, resolving..."
-                git checkout --ours results/ 2>/dev/null || true
-                git add results/
-                git rebase --continue || {
-                  echo "✗ Failed to resolve rebase conflict"
-                  git rebase --abort
-                  exit 1
-                }
-                echo "✓ Rebase conflict resolved"
-              fi
-
-              SLEEP_TIME=$((5 * (2 ** ($ATTEMPT - 1))))
-              echo "→ Waiting ${SLEEP_TIME}s before retry..."
-              sleep $SLEEP_TIME
-
-              ATTEMPT=$((ATTEMPT + 1))
-            fi
+          # Upload any box plot PNGs
+          find /tmp/staging -name "*.png" -type f | while read -r png; do
+            BASENAME=$(basename "$png")
+            aws s3 cp "$png" \
+              "s3://${S3_BUCKET}/${S3_PREFIX}/${BASENAME}" \
+              --endpoint-url "${AWS_ENDPOINT_URL}"
+            echo "✓ Uploaded ${BASENAME}"
           done
+
+          # Upload a "latest" pointer manifest
+          echo "{\"timestamp\": \"${TIMESTAMP}\", \"prefix\": \"${S3_PREFIX}\", \"workflow_run\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
+            > /tmp/latest.json
+          aws s3 cp /tmp/latest.json \
+            "s3://${S3_BUCKET}/interop-results/latest.json" \
+            --endpoint-url "${AWS_ENDPOINT_URL}"
+          echo "✓ Updated latest.json pointer"
+
+          echo "✓ All results uploaded to s3://${S3_BUCKET}/${S3_PREFIX}/"
