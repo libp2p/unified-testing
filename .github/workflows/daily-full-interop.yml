@@ -160,6 +160,11 @@ on:
         required: false
         default: false
         type: boolean
+      export-docker-images:
+        description: 'Export Docker images in snapshot (enabled by default on schedule, disabled on manual)'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   resolve-transport-parameters:
@@ -427,6 +432,7 @@ jobs:
           test-ignore: '${{ needs.resolve-transport-parameters.outputs.test-ignore }}'
           cache-dir: /srv/cache
           snapshot: true
+          export-docker-images: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.export-docker-images == 'true' }}
           force-matrix-rebuild: ${{ needs.resolve-transport-parameters.outputs.force-matrix-rebuild }}
           force-image-rebuild: ${{ needs.resolve-transport-parameters.outputs.force-image-rebuild }}
           debug: ${{ needs.resolve-transport-parameters.outputs.debug }}
@@ -451,6 +457,7 @@ jobs:
           router-ignore: '${{ needs.resolve-hole-punch-parameters.outputs.router-ignore }}'
           cache-dir: /srv/cache
           snapshot: true
+          export-docker-images: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.export-docker-images == 'true' }}
           force-matrix-rebuild: ${{ needs.resolve-hole-punch-parameters.outputs.force-matrix-rebuild }}
           force-image-rebuild: ${{ needs.resolve-hole-punch-parameters.outputs.force-image-rebuild }}
           debug: ${{ needs.resolve-hole-punch-parameters.outputs.debug }}
@@ -474,6 +481,7 @@ jobs:
           iterations: '${{ needs.resolve-perf-parameters.outputs.iterations }}'
           cache-dir: /srv/cache
           snapshot: true
+          export-docker-images: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.export-docker-images == 'true' }}
           force-matrix-rebuild: ${{ needs.resolve-perf-parameters.outputs.force-matrix-rebuild }}
           force-image-rebuild: ${{ needs.resolve-perf-parameters.outputs.force-image-rebuild }}
           debug: ${{ needs.resolve-perf-parameters.outputs.debug }}
@@ -691,26 +699,29 @@ jobs:
           echo "=== Generated YAML content preview ==="
           head -100 /tmp/merged-results/daily-full-interop.yml
 
-      - name: Install AWS CLI
+      - name: Verify AWS CLI
         if: github.event_name != 'workflow_dispatch' || inputs.upload-results
         shell: bash
+        run: aws --version
+
+      - name: Configure AWS credentials for Filebase
+        if: github.event_name != 'workflow_dispatch' || inputs.upload-results
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.FILEBASE_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.FILEBASE_SECRET_KEY }}
+          AWS_DEFAULT_REGION: us-east-1   # Filebase ignores region, but required
         run: |
-          if ! command -v aws &> /dev/null; then
-            echo "Installing AWS CLI..."
-            curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
-            unzip -q /tmp/awscliv2.zip -d /tmp/aws-install
-            /tmp/aws-install/aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli --update
-            rm -rf /tmp/awscliv2.zip /tmp/aws-install
-          fi
-          aws --version
+          echo "AWS credentials exported as env vars"
+          aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+          aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+          aws configure set default.region $AWS_DEFAULT_REGION
+          aws configure list
 
       - name: Upload results to Filebase
         if: github.event_name != 'workflow_dispatch' || inputs.upload-results
         shell: bash
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.FILEBASE_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.FILEBASE_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1
+          AWS_EC2_METADATA_DISABLED: true
         run: |
           set -euo pipefail
 
@@ -731,14 +742,16 @@ jobs:
 
           # Upload as date-stamped archive
           echo "-> Uploading history/${DATE_STAMP}.yaml..."
-          aws s3 cp "$RESULTS_FILE" "s3://${BUCKET}/history/${DATE_STAMP}.yaml" \
-            --endpoint-url "$ENDPOINT" \
+          aws --endpoint "$ENDPOINT" \
+            s3 cp "$RESULTS_FILE" \
+            "s3://${BUCKET}/history/${DATE_STAMP}.yaml" \
             --content-type "application/x-yaml"
 
           # Upload as latest results (overwrite)
           echo "-> Uploading results.yaml (latest)..."
-          aws s3 cp "$RESULTS_FILE" "s3://${BUCKET}/results.yaml" \
-            --endpoint-url "$ENDPOINT" \
+          aws --endpoint "$ENDPOINT" \
+            s3 cp "$RESULTS_FILE" \
+            "s3://${BUCKET}/results.yaml" \
             --content-type "application/x-yaml"
 
           echo "Upload complete."

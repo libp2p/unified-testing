@@ -48,8 +48,12 @@ create_snapshot() {
   fi
 
   # Step 7: Save Docker images (main + baseline)
-  print_message "Saving Docker images..."
-  save_docker_images_for_tests "${SNAPSHOT_DIR}" "${TEST_TYPE}"
+  if [ "${EXPORT_DOCKER_IMAGES}" == "true" ]; then
+    print_message "Saving Docker images..."
+    save_docker_images_for_tests "${SNAPSHOT_DIR}" "${TEST_TYPE}"
+  else
+    print_message "Skipping Docker image export (use --export-docker-images to include)"
+  fi
 
   # Step 9: Create settings.yaml
   print_message "Creating settings.yaml..."

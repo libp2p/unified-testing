@@ -12,6 +12,10 @@ export DEBUG=false
 export AUTO_YES=true
 ```
 
+## CLI Aliases
+
+> `--image-select` and `--image-ignore` are aliases for `--impl-select` and `--impl-ignore` respectively. Both set the same `IMPL_SELECT`/`IMPL_IGNORE` variables.
+
 ## Integration Tests
 
 ### Test 1: Basic SELECT narrows implementations

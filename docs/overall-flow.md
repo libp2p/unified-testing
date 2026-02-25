@@ -156,11 +156,13 @@ The `inputs.yaml` file must be loaded *before* libraries are sourced because it 
    - Filter variables (SELECT and IGNORE for: impl, transport, secure, muxer, test)
 
 3. Parse command-line arguments:
+   > `--image-select` and `--image-ignore` are aliases for `--impl-select` and `--impl-ignore` respectively.
+
    ```bash
    while [[ $# -gt 0 ]]; do
      case $1 in
-       --impl-select)      IMPL_SELECT="$2"; shift 2 ;;
-       --impl-ignore)      IMPL_IGNORE="$2"; shift 2 ;;
+       --impl-select|--image-select)      IMPL_SELECT="$2"; shift 2 ;;
+       --impl-ignore|--image-ignore)      IMPL_IGNORE="$2"; shift 2 ;;
        --transport-select) TRANSPORT_SELECT="$2"; shift 2 ;;
        --transport-ignore) TRANSPORT_IGNORE="$2"; shift 2 ;;
        --secure-select)    SECURE_SELECT="$2"; shift 2 ;;

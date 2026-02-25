@@ -46,6 +46,8 @@ relays:               # Relay server implementations
 
 Defines reusable patterns for test filtering with `--impl-select`, `--impl-ignore`, and related flags.
 
+> `--image-select` and `--image-ignore` are aliases for `--impl-select` and `--impl-ignore` respectively.
+
 ### Schema
 
 ```yaml

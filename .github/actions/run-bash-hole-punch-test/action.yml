@@ -42,6 +42,10 @@ inputs:
     description: "Force Docker image rebuilds (bypass cache)"
     required: false
     default: "false"
+  export-docker-images:
+    description: "Export Docker images when creating snapshot"
+    required: false
+    default: "false"
   debug:
     description: "Enable debug mode (sets DEBUG=true in test containers)"
     required: false
@@ -50,13 +54,9 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Install docker-compose
+    - name: Verify docker compose
       shell: bash
-      run: |
-        mkdir -p $HOME/.docker/cli-plugins
-        wget -q -O- https://github.com/docker/compose/releases/download/v2.21.0/docker-compose-linux-x86_64 > $HOME/.docker/cli-plugins/docker-compose
-        chmod +x $HOME/.docker/cli-plugins/docker-compose
-        docker compose version
+      run: docker compose version
 
     - name: Run hole punch interop tests
       shell: bash
@@ -82,6 +82,11 @@ runs:
           FORCE_IMAGE_FLAG="--force-image-rebuild"
         fi
 
+        EXPORT_DOCKER_FLAG=""
+        if [ "${{ inputs.export-docker-images }}" = "true" ]; then
+          EXPORT_DOCKER_FLAG="--export-docker-images"
+        fi
+
         DEBUG_FLAG=""
         if [ "${{ inputs.debug }}" = "true" ]; then
           DEBUG_FLAG="--debug"
@@ -96,6 +101,7 @@ runs:
           --router-ignore '${{ inputs.router-ignore }}' \
           --cache-dir '${{ inputs.cache-dir }}' \
           $SNAPSHOT_FLAG \
+          $EXPORT_DOCKER_FLAG \
           $FORCE_MATRIX_FLAG \
           $FORCE_IMAGE_FLAG \
           $DEBUG_FLAG \
