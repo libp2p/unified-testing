@@ -14,6 +14,11 @@ routers:
       type: local
       path: images/linux
       dockerfile: Dockerfile
+  - id: openbsd
+    source:
+      type: local
+      path: images/openbsd
+      dockerfile: Dockerfile
 
 # Relay configurations - Multiple relay types for testing different implementations
 relays:
