@@ -773,3 +773,55 @@ cd /srv/cache/test-run/transport-<key>-<timestamp>/
 - **0**: All tests passed
 - **1**: One or more tests failed
 - **Other**: Script error (check terminal output)
+
+---
+
+## Related Test Suites
+
+This repo contains several interoperability test suites that each focus on a different
+dimension of libp2p. They may be run independently or together via the daily
+`daily-full-interop.yml` CI workflow.
+
+### `misc/` — Application-Protocol Interop
+
+The `misc/` suite extends the transport matrix with a sixth dimension: **protocol**.
+Each test verifies that two implementations can correctly speak a libp2p application
+protocol over an established connection.
+
+Supported protocols (selected via `--protocol-select`):
+| Protocol | Description |
+|---|---|
+| `ping` | RFC-compliant `/ping/1.0.0` — 32-byte random payload, byte-for-byte echo |
+| `echo` | `/echo/1.0.0` — three probes (1 B, 256 B, 4 096 B), byte-for-byte echo |
+| `identify` | `/id/1.0.0` — validates `protocolVersion`, `publicKey`, `listenAddrs`, `protocols` |
+
+**Key differences from `transport/`:**
+- Uses the same `images.yaml` / `run.sh` / CI structure.
+- The listener returns stdout results; the dialer consumes them (see `misc/lib/run-single-test.sh`).
+- Test IDs encode the protocol, e.g. `js-v3.x x go-v0.45 (tcp, noise, yamux, echo)`.
+
+See [`misc/README.md`](../misc/README.md) and [`docs/write-a-transport-test-app.md`](../docs/write-a-transport-test-app.md) for implementation guidance.
+
+### `hole-punch/` — NAT Traversal / DCUtR Interop
+
+The `hole-punch/` suite verifies that implementations can establish **direct
+peer-to-peer connections through NAT** using the DCUtR protocol. It requires five
+containers per test (dialer router, listener router, relay, dialer peer, listener peer)
+arranged in a WAN + two private LAN topology.
+
+Results: `handshakeTime` in milliseconds written to stdout by the dialer.
+
+See [`hole-punch/README.md`](../hole-punch/README.md) and [`docs/write-a-hole-punch-test-app.md`](../docs/write-a-hole-punch-test-app.md).
+
+### `perf/` — Throughput and Latency Benchmarking
+
+The `perf/` suite measures **upload throughput**, **download throughput**, and
+**round-trip latency** of a libp2p implementation under controlled conditions. Both
+sides run on the same Docker network to isolate libp2p overhead from real network
+variability.
+
+Results: upload / download (Gbps) and latency (ms) quartile distributions written to
+stdout by the dialer.
+
+See [`perf/README.md`](../perf/README.md) and [`docs/write-a-perf-test-app.md`](../docs/write-a-perf-test-app.md).
+
