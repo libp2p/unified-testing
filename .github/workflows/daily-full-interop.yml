@@ -154,10 +154,11 @@ on:
         required: false
         default: false
         type: boolean
+      # Upload control
       upload-results:
-        description: 'Upload results to S3 storage'
+        description: 'Upload merged results to Filebase S3 bucket'
         required: false
-        default: true
+        default: false
         type: boolean
 
 jobs:
@@ -511,9 +512,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
 
       - name: Download transport test results
         if: needs.run-transport-full.result != 'skipped'
@@ -586,10 +584,6 @@ jobs:
             yq eval '.testResults[0]' "$PERF_YAML" 2>/dev/null || echo "No test results found"
           fi
 
-          echo ""
-          echo "=== Boxplot artifact ==="
-          find /tmp/perf-boxplots -name "*.png" -type f 2>/dev/null | head -10 || echo "No boxplots found"
-
       - name: Find result directories and prepare merge
         id: find-results
         shell: bash
@@ -619,18 +613,13 @@ jobs:
           echo "hole-punch-dir=$HOLE_PUNCH_DIR" >> $GITHUB_OUTPUT
           echo "→ Hole-punch results: ${HOLE_PUNCH_DIR:-not found}"
 
-          # Find perf results directory (merge boxplots into it)
+          # Find perf results directory
           PERF_DIR=""
           if [ -d /tmp/perf-results ]; then
             if [ -f /tmp/perf-results/results.yaml ]; then
               PERF_DIR="/tmp/perf-results"
             else
               PERF_DIR=$(find /tmp/perf-results -name "results.yaml" -exec dirname {} \; | head -1)
-            fi
-            # Copy boxplots to perf results directory (use find to handle nested directories)
-            if [ -n "$PERF_DIR" ] && [ -d /tmp/perf-boxplots ]; then
-              echo "Copying boxplots to $PERF_DIR"
-              find /tmp/perf-boxplots -name "*.png" -type f -exec cp -v {} "$PERF_DIR/" \; 2>/dev/null || echo "No boxplots found"
             fi
           fi
           echo "perf-dir=$PERF_DIR" >> $GITHUB_OUTPUT
@@ -682,74 +671,75 @@ jobs:
       - name: Run merge-interop-results script
         shell: bash
         run: |
+          mkdir -p /tmp/merged-results
           WORKFLOW_RUN_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
           bash lib/merge-interop-results.sh \
             "${{ steps.find-results.outputs.transport-dir }}" \
             "${{ steps.find-results.outputs.hole-punch-dir }}" \
             "${{ steps.find-results.outputs.perf-dir }}" \
-            "/tmp/staging/daily-full-interop.yml" \
+            "/tmp/merged-results/daily-full-interop.yml" \
             "$WORKFLOW_RUN_URL"
 
-      - name: Verify merged output
+      - name: Verify merged results
         shell: bash
         run: |
-          echo "=== Staged files ==="
-          ls -la /tmp/staging/ 2>/dev/null || echo "No staged files"
-          echo ""
-          echo "=== Box plot files ==="
-          find /tmp/staging -name "*.png" -type f 2>/dev/null || echo "No PNG files found"
+          echo "=== Merged results file ==="
+          ls -la /tmp/merged-results/daily-full-interop.yml
           echo ""
           echo "=== Generated YAML content preview ==="
-          head -100 /tmp/staging/daily-full-interop.yml 2>/dev/null || echo "No YAML found"
+          head -100 /tmp/merged-results/daily-full-interop.yml
 
-      - name: Upload results to S3
-        if: ${{ github.event_name == 'schedule' || github.event.inputs.upload-results == 'true' }}
+      - name: Install AWS CLI
+        if: github.event_name != 'workflow_dispatch' || inputs.upload-results
+        shell: bash
+        run: |
+          if ! command -v aws &> /dev/null; then
+            echo "Installing AWS CLI..."
+            curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+            unzip -q /tmp/awscliv2.zip -d /tmp/aws-install
+            /tmp/aws-install/aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli --update
+            rm -rf /tmp/awscliv2.zip /tmp/aws-install
+          fi
+          aws --version
+
+      - name: Upload results to Filebase
+        if: github.event_name != 'workflow_dispatch' || inputs.upload-results
         shell: bash
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.FILEBASE_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.FILEBASE_SECRET_ACCESS_KEY }}
-          AWS_ENDPOINT_URL: https://s3.filebase.com
-          S3_BUCKET: ${{ secrets.FILEBASE_BUCKET }}
+          AWS_DEFAULT_REGION: us-east-1
         run: |
           set -euo pipefail
 
-          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          S3_PREFIX="interop-results/${TIMESTAMP}"
+          RESULTS_FILE="/tmp/merged-results/daily-full-interop.yml"
+          BUCKET="test-plans-results"
+          ENDPOINT="https://s3.filebase.com"
+          DATE_STAMP=$(date -u +"%Y-%m-%d")
 
-          echo "→ Uploading results to s3://${S3_BUCKET}/${S3_PREFIX}/"
-
-          # Upload main results YAML
-          if [ -f /tmp/staging/daily-full-interop.yml ]; then
-            aws s3 cp /tmp/staging/daily-full-interop.yml \
-              "s3://${S3_BUCKET}/${S3_PREFIX}/daily-full-interop.yml" \
-              --endpoint-url "${AWS_ENDPOINT_URL}"
-            echo "✓ Uploaded daily-full-interop.yml"
+          if [ ! -f "$RESULTS_FILE" ]; then
+            echo "Error: Results file not found at $RESULTS_FILE"
+            exit 1
           fi
 
-          # Upload misc results if present
-          if [ -f /tmp/staging/misc-daily.yml ]; then
-            aws s3 cp /tmp/staging/misc-daily.yml \
-              "s3://${S3_BUCKET}/${S3_PREFIX}/misc-daily.yml" \
-              --endpoint-url "${AWS_ENDPOINT_URL}"
-            echo "✓ Uploaded misc-daily.yml"
-          fi
+          echo "Uploading results to Filebase S3..."
+          echo "  Bucket: $BUCKET"
+          echo "  Endpoint: $ENDPOINT"
+          echo "  Date stamp: $DATE_STAMP"
 
-          # Upload any box plot PNGs
-          find /tmp/staging -name "*.png" -type f | while read -r png; do
-            BASENAME=$(basename "$png")
-            aws s3 cp "$png" \
-              "s3://${S3_BUCKET}/${S3_PREFIX}/${BASENAME}" \
-              --endpoint-url "${AWS_ENDPOINT_URL}"
-            echo "✓ Uploaded ${BASENAME}"
-          done
+          # Upload as date-stamped archive
+          echo "-> Uploading history/${DATE_STAMP}.yaml..."
+          aws s3 cp "$RESULTS_FILE" "s3://${BUCKET}/history/${DATE_STAMP}.yaml" \
+            --endpoint-url "$ENDPOINT" \
+            --content-type "application/x-yaml"
 
-          # Upload a "latest" pointer manifest
-          echo "{\"timestamp\": \"${TIMESTAMP}\", \"prefix\": \"${S3_PREFIX}\", \"workflow_run\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}" \
-            > /tmp/latest.json
-          aws s3 cp /tmp/latest.json \
-            "s3://${S3_BUCKET}/interop-results/latest.json" \
-            --endpoint-url "${AWS_ENDPOINT_URL}"
-          echo "✓ Updated latest.json pointer"
+          # Upload as latest results (overwrite)
+          echo "-> Uploading results.yaml (latest)..."
+          aws s3 cp "$RESULTS_FILE" "s3://${BUCKET}/results.yaml" \
+            --endpoint-url "$ENDPOINT" \
+            --content-type "application/x-yaml"
 
-          echo "✓ All results uploaded to s3://${S3_BUCKET}/${S3_PREFIX}/"
+          echo "Upload complete."
+          echo "  Archive: s3://${BUCKET}/history/${DATE_STAMP}.yaml"
+          echo "  Latest:  s3://${BUCKET}/results.yaml"
