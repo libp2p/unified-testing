@@ -211,3 +211,120 @@ will be set to `pass` and the test will be reported as passing. Any other value
 will cause `status` to be set to `fail` and the test will be reported as
 failing.
 
+---
+
+## How to Write a Misc (Protocol) Test Application
+
+The `misc/` suite reuses the same Docker-Compose-based framework as `transport/`
+but adds a sixth dimension: **protocol**. Your test application must be able to
+act as either the dialer *or* the listener for the following application
+protocols as selected by the `MISC_PROTOCOL` environment variable.
+
+### Common Environment Variables
+
+In addition to the [standard environment variables](#your-application-reads-the-common-environment-variables)
+shared with the transport suite, the misc suite sets:
+
+```sh
+MISC_PROTOCOL=echo  # protocol to exercise: "ping", "echo", or "identify"
+```
+
+### Protocol: `ping` (`/ping/1.0.0`)
+
+The ping protocol is the simplest possible liveness check.
+
+**Minimum requirements:**
+
+1. The dialer opens a stream using the `/ping/1.0.0` protocol.
+2. The dialer sends exactly **32 bytes** of cryptographically random data.
+3. The listener echoes back exactly those 32 bytes.
+4. The dialer verifies the response is byte-for-byte identical.
+5. Repeat for **5 round trips**. Each must succeed.
+6. Exit with `0` on success, non-zero on failure.
+
+### Protocol: `echo` (`/echo/1.0.0`)
+
+Echo tests that arbitrary-length payloads are returned intact.
+
+**Minimum requirements:**
+
+1. The dialer opens a stream using the `/echo/1.0.0` protocol.
+2. The dialer sends three probes in sequence:
+
+   | Probe | Size | Content |
+   |---|---|---|
+   | 1 | 1 byte | `0x42` |
+   | 2 | 256 bytes | repeating `0xAB` |
+   | 3 | 4 096 bytes | repeating `0xCD` |
+
+3. After sending each probe, the dialer reads back the same number of bytes and
+   verifies the response is **byte-for-byte identical** to what was sent.
+4. All three probes must pass on the same open stream (do not close between probes).
+5. Exit with `0` on success, non-zero on failure.
+
+**Listener side:** Copy each received byte back to the writer until the stream is
+reset. No size prefix or framing is needed.
+
+### Protocol: `identify` (`/id/1.0.0`)
+
+Identify validates that a peer correctly advertises its metadata. Only the dialer
+does active verification; the listener just needs to have the identify protocol
+mounted.
+
+**Minimum requirements for the dialer (verifier):**
+
+After establishing a connection to the listener, dial the `/id/1.0.0` stream and
+parse the `Identify` protobuf. Then assert:
+
+| Field | Requirement |
+|---|---|
+| `protocolVersion` | Non-empty string |
+| `publicKey` | Non-empty bytes; must match the Peer ID of the connection |
+| `listenAddrs` | At least one address |
+| `protocols` | Non-empty list; **must** include `/ping/1.0.0` |
+| `observedAddr` | Optional — may be empty |
+
+Exit with `0` if all assertions pass, non-zero otherwise. Log each failure reason
+to stderr.
+
+### Results Schema (Misc)
+
+The misc dialer writes a minimal YAML status line to stdout:
+
+```yaml
+status: pass
+protocols_tested:
+  - echo
+```
+
+The `misc/lib/run-single-test.sh` script prepends the standard metadata block
+(test name, dialer/listener IDs, transport, secureChannel, muxer, protocol) and
+appends the data your dialer writes to stdout.
+
+### Example Dockerfile
+
+Your single Docker image should handle all three protocols. The simplest
+structure is a conditional dispatch on `MISC_PROTOCOL`:
+
+```dockerfile
+FROM node:20-alpine
+WORKDIR /app
+COPY package.json ./
+RUN npm ci --omit=dev
+COPY . ./
+ENTRYPOINT ["node", "index.js"]
+```
+
+```js
+// index.js (sketch)
+const protocol = process.env.MISC_PROTOCOL
+if (process.env.IS_DIALER === 'true') {
+  if (protocol === 'ping')     await runPingDialer()
+  else if (protocol === 'echo')     await runEchoDialer()
+  else if (protocol === 'identify') await runIdentifyDialer()
+} else {
+  await startListener() // mounts all protocol handlers
+}
+```
+
+
