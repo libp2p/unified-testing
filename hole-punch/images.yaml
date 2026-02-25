@@ -5,11 +5,13 @@
 # Usage: --test-select "~linux" or --test-ignore "!~linux"
 test-aliases:
   - alias: "all"
-    value: "~rust|~go"
+    value: "~rust|~go|~js"
   - alias: "rust"
     value: "rust-v0.56"
   - alias: "go"
     value: "go-v0.45"
+  - alias: "js"
+    value: "js-v3.x"
   - alias: "failing"
     value: "rust-v0.56 x rust-v0.56"
 
@@ -43,6 +45,16 @@ relays:
     secureChannels: [noise, tls]
     muxers: [yamux]
 
+  # js-libp2p v3.x — Circuit Relay v2 + DCUtR (TCP only for initial iteration)
+  - id: js-v3.x
+    source:
+      type: local
+      path: images/js/v3.x
+      dockerfile: Dockerfile.relay
+    transports: [tcp]
+    secureChannels: [noise]
+    muxers: [yamux]
+
 # Implementation definitions
 implementations:
   - id: rust-v0.56
@@ -63,4 +75,14 @@ implementations:
       dockerfile: test-plans/HolePunchDockerfile
     transports: [tcp, quic-v1]
     secureChannels: [noise, tls]
+    muxers: [yamux]
+
+  # js-libp2p v3.x — DCUtR + Circuit Relay v2 (TCP only for initial iteration)
+  - id: js-v3.x
+    source:
+      type: local
+      path: images/js/v3.x
+      dockerfile: Dockerfile.peer
+    transports: [tcp]
+    secureChannels: [noise]
     muxers: [yamux]
