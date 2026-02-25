@@ -118,42 +118,12 @@ on:
         required: false
         default: false
         type: boolean
-      # Misc parameters
-      misc-test-select:
-        description: '[Misc] Select specific tests (pipe-separated substrings)'
-        required: false
-        default: ''
-        type: string
-      misc-test-ignore:
-        description: '[Misc] Ignore specific tests (pipe-separated substrings)'
-        required: false
-        default: '~failing'
-        type: string
+      # Misc parameters (single input to stay within GitHub's 25-input limit)
       misc-protocol-select:
         description: '[Misc] Select specific protocols (pipe-separated, e.g. "ping|echo")'
         required: false
         default: ''
         type: string
-      misc-protocol-ignore:
-        description: '[Misc] Ignore specific protocols (pipe-separated substrings)'
-        required: false
-        default: ''
-        type: string
-      misc-force-matrix-rebuild:
-        description: '[Misc] Force test matrix regeneration'
-        required: false
-        default: false
-        type: boolean
-      misc-force-image-rebuild:
-        description: '[Misc] Force Docker image rebuilds'
-        required: false
-        default: false
-        type: boolean
-      misc-debug:
-        description: '[Misc] Enable debug mode'
-        required: false
-        default: false
-        type: boolean
       # Upload control
       upload-results:
         description: 'Upload merged results to Filebase S3 bucket'
@@ -378,14 +348,15 @@ jobs:
         shell: bash
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            # Manual trigger - use workflow inputs
-            echo "test-select=${{ github.event.inputs.misc-test-select }}" >> $GITHUB_OUTPUT
-            echo "test-ignore=${{ github.event.inputs.misc-test-ignore }}" >> $GITHUB_OUTPUT
+            # Manual trigger - only misc-protocol-select is exposed as a dispatch input
+            # (all other misc params use defaults to stay within GitHub's 25-input limit)
+            echo "test-select=" >> $GITHUB_OUTPUT
+            echo "test-ignore=~failing" >> $GITHUB_OUTPUT
             echo "protocol-select=${{ github.event.inputs.misc-protocol-select }}" >> $GITHUB_OUTPUT
-            echo "protocol-ignore=${{ github.event.inputs.misc-protocol-ignore }}" >> $GITHUB_OUTPUT
-            echo "force-matrix-rebuild=${{ github.event.inputs.misc-force-matrix-rebuild }}" >> $GITHUB_OUTPUT
-            echo "force-image-rebuild=${{ github.event.inputs.misc-force-image-rebuild }}" >> $GITHUB_OUTPUT
-            echo "debug=${{ github.event.inputs.misc-debug }}" >> $GITHUB_OUTPUT
+            echo "protocol-ignore=" >> $GITHUB_OUTPUT
+            echo "force-matrix-rebuild=false" >> $GITHUB_OUTPUT
+            echo "force-image-rebuild=false" >> $GITHUB_OUTPUT
+            echo "debug=false" >> $GITHUB_OUTPUT
             echo "should-run-tests=true" >> $GITHUB_OUTPUT
             echo "→ Manual trigger: using workflow inputs for misc"
           else
@@ -701,26 +672,6 @@ jobs:
       - name: Install AWS CLI
         if: github.event_name != 'workflow_dispatch' || inputs.upload-results
         shell: bash
-        run: aws --version
-
-      - name: Configure AWS credentials for Filebase
-        if: github.event_name != 'workflow_dispatch' || inputs.upload-results
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.FILEBASE_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.FILEBASE_SECRET_KEY }}
-          AWS_DEFAULT_REGION: us-east-1   # Filebase ignores region, but required
-        run: |
-          echo "AWS credentials exported as env vars"
-          aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
-          aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
-          aws configure set default.region $AWS_DEFAULT_REGION
-          aws configure list
-
-      - name: Upload results to Filebase
-        if: github.event_name != 'workflow_dispatch' || inputs.upload-results
-        shell: bash
-        env:
-          AWS_EC2_METADATA_DISABLED: true
         run: |
           if ! command -v aws &> /dev/null; then
             echo "Installing AWS CLI..."
@@ -735,8 +686,8 @@ jobs:
         if: github.event_name != 'workflow_dispatch' || inputs.upload-results
         shell: bash
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.FILEBASE_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.FILEBASE_SECRET_ACCESS_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.FILEBASE_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.FILEBASE_SECRET_KEY }}
           AWS_DEFAULT_REGION: us-east-1
         run: |
           set -euo pipefail
