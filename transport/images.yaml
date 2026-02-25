@@ -31,10 +31,45 @@ test-aliases:
   - alias: "zig"
     value: "zig-v0.0.1"
   - alias: "eth-p2p"
-    value: "eth-p2p
--z-v0.0.1"
+    value: "eth-p2p-z-v0.0.1"
+  # Known failing tests — documented upstream bugs, skipped by CI via --test-ignore '~failing'
+  # Issue #9: c-v0.0.1 x jvm-v1.2 yamux ping stream premature close
+  - alias: "failing-issue-9"
+    value: "c-v0.0.1 x jvm-v1.2 (tcp, noise, yamux)"
+  # Issue #10: c-v0.0.1 QUIC listener hang/crash with rust dialers
+  - alias: "failing-issue-10"
+    value: "rust-v0.53 x c-v0.0.1 (quic-v1)|rust-v0.55 x c-v0.0.1 (quic-v1)|rust-v0.56 x c-v0.0.1 (quic-v1)"
+  # Issue #11: c-v0.0.1 QUIC stream hang during multistream-select
+  - alias: "failing-issue-11"
+    value: "c-v0.0.1 x go-v0.40 (quic-v1)"
+  # Issue #12: chromium-rust-v0.53 WASM to jvm-v1.2 WebSocket/mplex timeout
+  - alias: "failing-issue-12"
+    value: "chromium-rust-v0.53 x jvm-v1.2 (ws, noise, mplex)"
+  # Issue #13: chromium-rust-v0.53 WASM to python-v0.x WebSocket timeout
+  - alias: "failing-issue-13"
+    value: "chromium-rust-v0.53 x python-v0.x (ws, noise, mplex)"
+  # Issue #14: Firefox js-libp2p WebTransport connection rejected (all go listeners)
+  - alias: "failing-issue-14"
+    value: "firefox-js-v1.x x go-v0.38 (webtransport)|firefox-js-v1.x x go-v0.39 (webtransport)|firefox-js-v1.x x go-v0.40 (webtransport)|firefox-js-v1.x x go-v0.41 (webtransport)|firefox-js-v1.x x go-v0.42 (webtransport)|firefox-js-v1.x x go-v0.43 (webtransport)|firefox-js-v1.x x go-v0.44 (webtransport)|firefox-js-v1.x x go-v0.45 (webtransport)|firefox-js-v2.x x go-v0.38 (webtransport)|firefox-js-v2.x x go-v0.39 (webtransport)|firefox-js-v2.x x go-v0.40 (webtransport)|firefox-js-v2.x x go-v0.41 (webtransport)|firefox-js-v2.x x go-v0.42 (webtransport)|firefox-js-v2.x x go-v0.43 (webtransport)|firefox-js-v2.x x go-v0.44 (webtransport)|firefox-js-v2.x x go-v0.45 (webtransport)"
+  # Issue #15: js-v1.x WebSocket dial abort to jvm-v1.2
+  - alias: "failing-issue-15"
+    value: "js-v1.x x jvm-v1.2 (ws, noise, yamux)|js-v1.x x jvm-v1.2 (ws, noise, mplex)"
+  # Issue #17: nim-v1.14 / python-v0.x WebSocket protocol negotiation failure
+  - alias: "failing-issue-17"
+    value: "nim-v1.14 x python-v0.x (ws, noise, mplex)|nim-v1.14 x python-v0.x (ws, noise, yamux)|python-v0.x x nim-v1.14 (ws, noise, mplex)|python-v0.x x nim-v1.14 (ws, noise, yamux)"
+  # Issue #18: rust-v0.53 WebRTC-direct connection timeout
+  - alias: "failing-issue-18"
+    value: "rust-v0.53 x go-v0.38 (webrtc-direct)|chromium-rust-v0.53 x rust-v0.53 (webrtc-direct)"
+  # Issue #19: rust-v0.53 WebSocket quicksink panic (intermittent)
+  - alias: "failing-issue-19"
+    value: "go-v0.40 x rust-v0.53 (ws, tls, yamux)"
+  # Issue #20: rust-v0.56 WebRTC-direct SRTP panic (upstream webrtc-rs bug)
+  - alias: "failing-issue-20"
+    value: "go-v0.38 x rust-v0.56 (webrtc-direct)|go-v0.39 x rust-v0.56 (webrtc-direct)|go-v0.40 x rust-v0.56 (webrtc-direct)|go-v0.41 x rust-v0.56 (webrtc-direct)|go-v0.42 x rust-v0.56 (webrtc-direct)|go-v0.43 x rust-v0.56 (webrtc-direct)|go-v0.44 x rust-v0.56 (webrtc-direct)|go-v0.45 x rust-v0.56 (webrtc-direct)"
+  # Broad failing list: everything except rust-v0.56, js, and python-v0.x (as of 25 Jan 2026)
+  # Plus ~failing-issue-20 for specific rust-v0.56 webrtc-direct SRTP bug
   - alias: "failing"
-    value: ""
+    value: "~browsers|go-v0.38|go-v0.39|go-v0.40|go-v0.41|go-v0.42|go-v0.43|go-v0.44|go-v0.45|~nim|~jvm|~c|~dotnet|~zig|~eth-p2p|rust-v0.53|rust-v0.54|rust-v0.55|~failing-issue-20"
 
 implementations:
   # Rust implementations
