@@ -563,6 +563,15 @@ jobs:
             yq eval '.testResults[0]' "$PERF_YAML" 2>/dev/null || echo "No test results found"
           fi
 
+          echo ""
+          echo "=== Misc artifact ==="
+          find /tmp/misc-results -type f 2>/dev/null | head -20 || echo "No misc results found"
+          MISC_YAML=$(find /tmp/misc-results -name "results.yaml" 2>/dev/null | head -1)
+          if [ -n "$MISC_YAML" ] && [ -f "$MISC_YAML" ]; then
+            echo "--- First test entry ---"
+            yq eval '.tests[0]' "$MISC_YAML" 2>/dev/null || echo "No tests found"
+          fi
+
       - name: Find result directories and prepare merge
         id: find-results
         shell: bash
@@ -604,26 +613,17 @@ jobs:
           echo "perf-dir=$PERF_DIR" >> $GITHUB_OUTPUT
           echo "→ Perf results: ${PERF_DIR:-not found}"
 
-      - name: Copy misc results to staging
-        if: needs.run-misc-full.result != 'skipped'
-        shell: bash
-        run: |
-          MISC_RESULTS_FILE=""
+          # Find misc results directory
+          MISC_DIR=""
           if [ -d /tmp/misc-results ]; then
             if [ -f /tmp/misc-results/results.yaml ]; then
-              MISC_RESULTS_FILE="/tmp/misc-results/results.yaml"
+              MISC_DIR="/tmp/misc-results"
             else
-              MISC_RESULTS_FILE=$(find /tmp/misc-results -name "results.yaml" | head -1)
+              MISC_DIR=$(find /tmp/misc-results -name "results.yaml" -exec dirname {} \; | head -1)
             fi
           fi
-
-          if [ -n "$MISC_RESULTS_FILE" ] && [ -f "$MISC_RESULTS_FILE" ]; then
-            mkdir -p /tmp/staging
-            cp "$MISC_RESULTS_FILE" /tmp/staging/misc-daily.yml
-            echo "→ Staged misc results to /tmp/staging/misc-daily.yml"
-          else
-            echo "→ No misc results found, skipping"
-          fi
+          echo "misc-dir=$MISC_DIR" >> $GITHUB_OUTPUT
+          echo "→ Misc results: ${MISC_DIR:-not found}"
 
       - name: Verify merge script version
         shell: bash
@@ -657,6 +657,7 @@ jobs:
             "${{ steps.find-results.outputs.transport-dir }}" \
             "${{ steps.find-results.outputs.hole-punch-dir }}" \
             "${{ steps.find-results.outputs.perf-dir }}" \
+            "${{ steps.find-results.outputs.misc-dir }}" \
             "/tmp/merged-results/daily-full-interop.yml" \
             "$WORKFLOW_RUN_URL"
 
