@@ -494,6 +494,7 @@ jobs:
 
       - name: Download transport test results
         if: needs.run-transport-full.result != 'skipped'
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           pattern: transport-test-results-*
@@ -502,6 +503,7 @@ jobs:
 
       - name: Download hole-punch test results
         if: needs.run-hole-punch-full.result != 'skipped'
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           pattern: hole-punch-test-results-*
@@ -510,6 +512,7 @@ jobs:
 
       - name: Download perf test results
         if: needs.run-perf-full.result != 'skipped'
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           pattern: perf-test-results-*
@@ -694,7 +697,7 @@ jobs:
           set -euo pipefail
 
           RESULTS_FILE="/tmp/merged-results/daily-full-interop.yml"
-          BUCKET="test-plans-results"
+          BUCKET="results"
           ENDPOINT="https://s3.filebase.com"
           DATE_STAMP=$(date -u +"%Y-%m-%d")
 

@@ -211,7 +211,7 @@ Dependencies:
             Text utilities: awk, sed, grep, sort, head, tail, wc, tr, paste, cat
             File utilities: mkdir, cp, mv, rm, chmod, find, xargs, basename, dirname, mktemp
             System utilities: date, sleep, uname, hostname, ps
-  Optional: gnuplot (box plots), git (submodule-based builds)
+  Optional: git (submodule-based builds)
   Run with --check-deps to verify installation.
 
 EOF

@@ -190,12 +190,6 @@ copy_config_files() {
     cp "${test_pass_dir}/results.html" "${snapshot_dir}/" 2>/dev/null || true
     cp "${test_pass_dir}/LATEST_TEST_RESULTS.md" "${snapshot_dir}/" 2>/dev/null || true
 
-    # Copy test-type-specific files
-    if [ "${test_type}" == "perf" ]; then
-      # Copy box plot images (generated as boxplot-{upload,download,latency}.png)
-      cp "${test_pass_dir}"/boxplot-*.png "${snapshot_dir}/" 2>/dev/null || true
-    fi
-
     # Copy log files
     if [ -d "${test_pass_dir}/logs" ] && [ "$(ls -A "${test_pass_dir}/logs" 2>/dev/null)" ]; then
       cp "${test_pass_dir}/logs/"* "${snapshot_dir}/logs/" 2>/dev/null || true
