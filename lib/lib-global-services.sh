@@ -32,6 +32,11 @@ start_redis_service() {
       docker network create "${network_name}" \
         --subnet 10.16.0.0/16 \
         --gateway 10.16.0.1 > /dev/null
+    elif [ "${network_name}" == "misc-network" ]; then
+      # Misc network: 10.20.0.0/16 (between transport and hole-punch, non-overlapping)
+      docker network create "${network_name}" \
+        --subnet 10.20.0.0/16 \
+        --gateway 10.20.0.1 > /dev/null
     else
       # Other shared networks (hole-punch, etc.): 10.24.0.0/16
       docker network create "${network_name}" \
