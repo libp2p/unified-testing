@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Thin executor: Builds a single Docker image based on YAML parameters
-# Used by all test suites (transport, perf, hole-punch)
+# Used by all test suites (transport, perf, hole-punch, misc)
 
 set -euo pipefail
 

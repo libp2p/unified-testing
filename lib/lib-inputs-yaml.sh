@@ -10,7 +10,7 @@ fi
 # Generate inputs.yaml file capturing all test run configuration
 # Args:
 #   $1: output_file - Path to write inputs.yaml
-#   $2: test_type - Type of test (transport, perf, hole-punch)
+#   $2: test_type - Type of test (transport, perf, hole-punch, misc)
 #   $3+: original_args - Original command line arguments
 # Usage:
 #   generate_inputs_yaml "$TEST_PASS_DIR/inputs.yaml" "transport" "${ORIGINAL_ARGS[@]}"

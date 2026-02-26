@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Common library for test matrix generation functions
-# Shared across transport, hole-punch, and perf generate-tests.sh scripts
+# Shared across transport, hole-punch, perf, and misc generate-tests.sh scripts
 
 # Standalone transports (self-encrypted transports that don't need layered security)
 STANDALONE_TRANSPORTS="quic quic-v1 webtransport webrtc webrtc-direct https"
