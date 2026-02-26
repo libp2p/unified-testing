@@ -354,6 +354,7 @@ generate_snapshot_readme() {
     transport) test_type_name="Transport Interoperability" ;;
     hole-punch) test_type_name="Hole Punch Interoperability" ;;
     perf) test_type_name="Performance Benchmark" ;;
+    misc) test_type_name="Misc Protocol Interoperability" ;;
     *) test_type_name="Test" ;;
   esac
 
