@@ -204,7 +204,7 @@ async fn run_listener(
             }
         }
 
-        if sent_observed_addr && my_observed_addr.is_some() {
+        if my_observed_addr.is_some() {
             break my_observed_addr.unwrap()
         }
     };
@@ -221,11 +221,16 @@ async fn run_listener(
     swarm
         .listen_on(relayed_listener_addr.clone())
         .expect("failed to listen on p2p circuit");
-    
-    // Publish to Redis with TEST_KEY namespacing
+
     let listener_peer_id_key = format!("{test_key}_listener_peer_id");
+
+    // Publish peer id so the dialer can discover us. With a Rust relay we get
+    // ReservationReqAccepted and could publish then; with a Python relay the
+    // wire format may not emit that event (§11 relay-reservation-wire-comparison.md),
+    // so we also publish after a short delay so py×rust tests pass with either relay.
+    tokio::time::sleep(Duration::from_secs(2)).await;
     let _: () = con
-        .set(&listener_peer_id_key, relayed_listener_addr.to_string())
+        .set(&listener_peer_id_key, peer_id.to_string())
         .await
         .expect(&format!(
             "Failed to publish peer id to Redis: (key: {listener_peer_id_key})"

@@ -171,6 +171,7 @@ else
       - REDIS_ADDR=hole-punch-redis:6379
       - TEST_KEY=${TEST_KEY}
       - TRANSPORT=${TRANSPORT_NAME}
+      - RELAY_ID=${RELAY_ID}
       - DIALER_IP=${DIALER_IP}
       - WAN_SUBNET=${WAN_SUBNET}
       - WAN_ROUTER_IP=${DIALER_ROUTER_LAN_IP}
@@ -198,6 +199,7 @@ else
       - REDIS_ADDR=hole-punch-redis:6379
       - TEST_KEY=${TEST_KEY}
       - TRANSPORT=${TRANSPORT_NAME}
+      - RELAY_ID=${RELAY_ID}
       - LISTENER_IP=${LISTENER_IP}
       - WAN_SUBNET=${WAN_SUBNET}
       - WAN_ROUTER_IP=${LISTENER_ROUTER_LAN_IP}
