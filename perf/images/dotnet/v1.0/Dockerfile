@@ -9,8 +9,8 @@ RUN dotnet restore
 # Copy the rest of the source code
 COPY . ./
 
-# Build and publish as self-contained executable
-RUN dotnet publish -c Release -o /app/publish --no-restore \
+# Build and publish application
+RUN dotnet publish -c Release -o /app/publish \
     /p:PublishSingleFile=false
 
 # Runtime stage (slim image with only the .NET runtime)
