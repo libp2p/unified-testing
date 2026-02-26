@@ -98,6 +98,13 @@ EOF
   ROUTER_IGNORE: "${ROUTER_IGNORE:-}"
 EOF
             ;;
+        misc)
+            cat >> "${output_file}" <<EOF
+  # Misc-specific filtering
+  PROTOCOL_SELECT: "${PROTOCOL_SELECT:-}"
+  PROTOCOL_IGNORE: "${PROTOCOL_IGNORE:-}"
+EOF
+            ;;
     esac
 
     print_success "Generated inputs.yaml: ${output_file}"
