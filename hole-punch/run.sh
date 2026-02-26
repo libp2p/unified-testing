@@ -134,7 +134,9 @@ Usage: $0 [options]
 Filtering Options:
   Implementation Filtering:
     --impl-select VALUE         Select implementations (pipe-separated patterns)
+                                (alias: --image-select)
     --impl-ignore VALUE         Ignore implementations (pipe-separated patterns)
+                                (alias: --image-ignore)
 
   Relay/Router Filtering:
     --relay-select VALUE        Select relays (pipe-separated patterns)
@@ -160,6 +162,7 @@ Configuration Options:
 
 Execution Options:
   --snapshot                    Create test pass snapshot after completion
+  --export-docker-images        Export Docker images when creating snapshot
   --debug                       Enable debug mode (sets DEBUG=true in test containers)
   --force-matrix-rebuild        Force regeneration of test matrix (bypass cache)
   --force-image-rebuild         Force rebuilding of all docker images (bypass cache)
@@ -218,8 +221,8 @@ EOF
 while [ $# -gt 0 ]; do
   case "$1" in
     # Implementation filtering
-    --impl-select) IMPL_SELECT="$2"; shift 2 ;;
-    --impl-ignore) IMPL_IGNORE="$2"; shift 2 ;;
+    --impl-select|--image-select) IMPL_SELECT="$2"; shift 2 ;;
+    --impl-ignore|--image-ignore) IMPL_IGNORE="$2"; shift 2 ;;
 
     # Relay/Router filtering (hole-punch specific)
     --relay-select) RELAY_SELECT="$2"; shift 2 ;;
@@ -245,6 +248,7 @@ while [ $# -gt 0 ]; do
 
     # Execution options
     --snapshot) CREATE_SNAPSHOT=true; shift ;;
+    --export-docker-images) EXPORT_DOCKER_IMAGES=true; shift ;;
     --debug) DEBUG=true; shift ;;
     --force-matrix-rebuild) FORCE_MATRIX_REBUILD=true; shift ;;
     --force-image-rebuild) FORCE_IMAGE_REBUILD=true; shift ;;
@@ -450,6 +454,7 @@ print_message "Workers: ${WORKER_COUNT}"
 [ -n "${TEST_SELECT}" ] && print_message "Test Select: ${TEST_SELECT}"
 [ -n "${TEST_IGNORE}" ] && print_message "Test Ignore: ${TEST_IGNORE}"
 print_message "Create Snapshot: ${CREATE_SNAPSHOT}"
+print_message "Export Docker Images: ${EXPORT_DOCKER_IMAGES}"
 print_message "Debug: ${DEBUG}"
 print_message "Force Matrix Rebuild: ${FORCE_MATRIX_REBUILD}"
 print_message "Force Image Rebuild: ${FORCE_IMAGE_REBUILD}"

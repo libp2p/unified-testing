@@ -143,7 +143,9 @@ Usage: ${0} [options]
 Filtering Options:
   Implementation Filtering:
     --impl-select VALUE         Select implementations (pipe-separated patterns)
+                                (alias: --image-select)
     --impl-ignore VALUE         Ignore implementations (pipe-separated patterns)
+                                (alias: --image-ignore)
 
   Baseline Filtering:
     --baseline-select VALUE     Select baseline tests (pipe-separated patterns)
@@ -171,6 +173,7 @@ Configuration Options:
 
 Execution Options:
   --snapshot                    Create test pass snapshot after completion
+  --export-docker-images        Export Docker images when creating snapshot
   --debug                       Enable debug mode
   --force-matrix-rebuild        Force test matrix regeneration (bypass cache)
   --force-image-rebuild         Force Docker image rebuilds (bypass cache)
@@ -229,8 +232,8 @@ EOF
 while [ $# -gt 0 ]; do
   case "${1}" in
     # Implementation filtering
-    --impl-select) IMPL_SELECT="${2}"; shift 2 ;;
-    --impl-ignore) IMPL_IGNORE="${2}"; shift 2 ;;
+    --impl-select|--image-select) IMPL_SELECT="${2}"; shift 2 ;;
+    --impl-ignore|--image-ignore) IMPL_IGNORE="${2}"; shift 2 ;;
 
     # Baseline filtering (perf only)
     --baseline-select) BASELINE_SELECT="${2}"; shift 2 ;;
@@ -258,6 +261,7 @@ while [ $# -gt 0 ]; do
 
     # Execution options
     --snapshot) CREATE_SNAPSHOT=true; shift ;;
+    --export-docker-images) EXPORT_DOCKER_IMAGES=true; shift ;;
     --debug) DEBUG=true; shift ;;
     --force-matrix-rebuild) FORCE_MATRIX_REBUILD=true; shift ;;
     --force-image-rebuild) FORCE_IMAGE_REBUILD=true; shift ;;
@@ -476,6 +480,7 @@ print_message "Iterations: ${ITERATIONS}"
 print_message "Duration per Iteration: ${DURATION_PER_ITERATION}s"
 print_message "Latency Iterations: ${LATENCY_ITERATIONS}"
 print_message "Create Snapshot: ${CREATE_SNAPSHOT}"
+print_message "Export Docker Images: ${EXPORT_DOCKER_IMAGES}"
 print_message "Debug: ${DEBUG}"
 print_message "Force Matrix Rebuild: ${FORCE_MATRIX_REBUILD}"
 print_message "Force Image Rebuild: ${FORCE_IMAGE_REBUILD}"
