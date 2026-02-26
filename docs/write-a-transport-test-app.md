@@ -226,7 +226,7 @@ In addition to the [standard environment variables](#your-application-reads-the-
 shared with the transport suite, the misc suite sets:
 
 ```sh
-MISC_PROTOCOL=echo  # protocol to exercise: "ping", "echo", or "identify"
+PROTOCOL=echo  # protocol to exercise: "ping", "echo", or "identify"
 ```
 
 ### Protocol: `ping` (`/ping/1.0.0`)
