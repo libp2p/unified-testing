@@ -49,6 +49,12 @@ iptables -P FORWARD DROP
 iptables -P INPUT ACCEPT
 iptables -P OUTPUT ACCEPT
 
+# Drop unsolicited inbound TCP on WAN interface to prevent RST during hole-punch.
+# Without this, incoming SYNs that arrive before conntrack entries are created
+# get accepted by INPUT, find no listener, and generate RST - killing hole-punch.
+iptables -A INPUT -i "$WAN_IF" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+iptables -A INPUT -i "$WAN_IF" -j DROP
+
 # Configure NAT (MASQUERADE)
 # Translate source IP from LAN subnet to WAN IP when forwarding to WAN
 iptables -t nat -A POSTROUTING -s "$LAN_SUBNET" -o "$WAN_IF" -j MASQUERADE
