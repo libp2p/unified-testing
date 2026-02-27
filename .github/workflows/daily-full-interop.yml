@@ -62,6 +62,11 @@ on:
         required: false
         default: '~failing'
         type: string
+      hole-punch-transport-ignore:
+        description: '[Hole-punch] Ignore transports (pipe-separated patterns)'
+        required: false
+        default: 'ws|webrtc-direct'
+        type: string
       hole-punch-force-matrix-rebuild:
         description: '[Hole-punch] Force test matrix regeneration'
         required: false
@@ -200,6 +205,7 @@ jobs:
       relay-ignore: ${{ steps.resolve.outputs.relay-ignore }}
       router-select: ${{ steps.resolve.outputs.router-select }}
       router-ignore: ${{ steps.resolve.outputs.router-ignore }}
+      transport-ignore: ${{ steps.resolve.outputs.transport-ignore }}
       force-matrix-rebuild: ${{ steps.resolve.outputs.force-matrix-rebuild }}
       force-image-rebuild: ${{ steps.resolve.outputs.force-image-rebuild }}
       debug: ${{ steps.resolve.outputs.debug }}
@@ -222,6 +228,7 @@ jobs:
             echo "relay-ignore=${{ github.event.inputs.hole-punch-relay-ignore }}" >> $GITHUB_OUTPUT
             echo "router-select=${{ github.event.inputs.hole-punch-router-select }}" >> $GITHUB_OUTPUT
             echo "router-ignore=${{ github.event.inputs.hole-punch-router-ignore }}" >> $GITHUB_OUTPUT
+            echo "transport-ignore=${{ github.event.inputs.hole-punch-transport-ignore }}" >> $GITHUB_OUTPUT
             echo "force-matrix-rebuild=${{ github.event.inputs.hole-punch-force-matrix-rebuild }}" >> $GITHUB_OUTPUT
             echo "force-image-rebuild=${{ github.event.inputs.hole-punch-force-image-rebuild }}" >> $GITHUB_OUTPUT
             echo "debug=${{ github.event.inputs.hole-punch-debug }}" >> $GITHUB_OUTPUT
@@ -238,6 +245,7 @@ jobs:
             echo "relay-ignore=" >> $GITHUB_OUTPUT
             echo "router-select=" >> $GITHUB_OUTPUT
             echo "router-ignore=" >> $GITHUB_OUTPUT
+            echo "transport-ignore=ws|webrtc-direct" >> $GITHUB_OUTPUT
             echo "force-image-rebuild=false" >> $GITHUB_OUTPUT
             echo "debug=false" >> $GITHUB_OUTPUT
 
@@ -359,6 +367,7 @@ jobs:
           relay-ignore: '${{ needs.resolve-hole-punch-parameters.outputs.relay-ignore }}'
           router-select: '${{ needs.resolve-hole-punch-parameters.outputs.router-select }}'
           router-ignore: '${{ needs.resolve-hole-punch-parameters.outputs.router-ignore }}'
+          transport-ignore: '${{ needs.resolve-hole-punch-parameters.outputs.transport-ignore }}'
           cache-dir: /srv/cache
           snapshot: true
           export-docker-images: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.export-docker-images == 'true' }}
