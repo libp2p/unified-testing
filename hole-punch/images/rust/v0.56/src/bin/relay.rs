@@ -118,6 +118,13 @@ async fn main() -> Result<()> {
                 let full_multiaddr = format!("{address}/p2p/{peer_id}");
                 eprintln!("Listening on: {full_multiaddr}");
 
+                // Register the listen address as an external address so the relay
+                // behaviour includes it in RESERVE OK responses. Without this,
+                // clients get NoAddressesInReservation because relay::Behaviour
+                // only includes confirmed external addresses.
+                swarm.add_external_address(address.clone());
+                eprintln!("Registered external address: {address}");
+
                 // Publish to Redis with TEST_KEY namespacing
                 let relay_addr_key = format!("{test_key}_relay_multiaddr");
                 let _: () = con
