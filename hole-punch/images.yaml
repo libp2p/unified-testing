@@ -4,6 +4,7 @@
 # Test Aliases - Define reusable patterns for test selection
 # Usage: --test-select "~linux" or --test-ignore "!~linux"
 test-aliases:
+  # Known failing tests — documented upstream bugs, skipped by CI via --test-ignore '~failing'
   - alias: "failing"
     value: "rust-v0.56 x rust-v0.56"
 
