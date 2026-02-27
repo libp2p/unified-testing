@@ -156,11 +156,13 @@ The `inputs.yaml` file must be loaded *before* libraries are sourced because it 
    - Filter variables (SELECT and IGNORE for: impl, transport, secure, muxer, test)
 
 3. Parse command-line arguments:
+   > `--image-select` and `--image-ignore` are aliases for `--impl-select` and `--impl-ignore` respectively.
+
    ```bash
    while [[ $# -gt 0 ]]; do
      case $1 in
-       --impl-select)      IMPL_SELECT="$2"; shift 2 ;;
-       --impl-ignore)      IMPL_IGNORE="$2"; shift 2 ;;
+       --impl-select|--image-select)      IMPL_SELECT="$2"; shift 2 ;;
+       --impl-ignore|--image-ignore)      IMPL_IGNORE="$2"; shift 2 ;;
        --transport-select) TRANSPORT_SELECT="$2"; shift 2 ;;
        --transport-ignore) TRANSPORT_IGNORE="$2"; shift 2 ;;
        --secure-select)    SECURE_SELECT="$2"; shift 2 ;;
@@ -936,20 +938,14 @@ The `inputs.yaml` file must be loaded *before* libraries are sourced because it 
    - **Transport**: Results table with pass/fail matrix
    - **Hole-Punch**: Results table with latency measurements
 
-3. **Perf-specific: Generate box plots** (requires gnuplot):
-   ```bash
-   bash "${SCRIPT_DIR}/generate-boxplot.sh" "${TEST_PASS_DIR}"
-   ```
+3. **Box plots**: Now rendered directly by the [libp2p status page](https://libp2p.io/status/#performance-benchmarks) from the YAML data uploaded to Filebase S3. Local box plot generation has been removed.
 
 **Files Generated**:
 - **`results.html`** - HTML dashboard (all test types)
-- **`charts.html`** - Interactive charts (perf only)
-- **`boxplot.png`** - Box plot visualization (perf only)
 
 **Code Location**:
 - Main: `perf/run.sh:787-822`
 - Dashboard: `perf/lib/generate-dashboard.sh`
-- Charts: `perf/lib/generate-boxplot.sh`
 
 ---
 

@@ -54,6 +54,11 @@ on:
         required: false
         default: true
         type: boolean
+      export-docker-images:
+        description: 'Export Docker images in snapshot (slow, usually not needed for PRs)'
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -72,6 +77,7 @@ jobs:
       force-image-rebuild: ${{ steps.resolve.outputs.force-image-rebuild }}
       debug: ${{ steps.resolve.outputs.debug }}
       snapshot: ${{ steps.resolve.outputs.snapshot }}
+      export-docker-images: ${{ steps.resolve.outputs.export-docker-images }}
       should-run-tests: ${{ steps.resolve.outputs.should-run-tests }}
     steps:
       - name: Checkout code
@@ -101,6 +107,7 @@ jobs:
             echo "force-image-rebuild=${{ github.event.inputs.force-image-rebuild }}" >> $GITHUB_OUTPUT
             echo "debug=${{ github.event.inputs.debug }}" >> $GITHUB_OUTPUT
             echo "snapshot=${{ github.event.inputs.snapshot }}" >> $GITHUB_OUTPUT
+            echo "export-docker-images=${{ github.event.inputs.export-docker-images }}" >> $GITHUB_OUTPUT
             echo "should-run-tests=true" >> $GITHUB_OUTPUT
             echo "→ Manual trigger: using workflow inputs"
           else
@@ -140,6 +147,7 @@ jobs:
             fi
             echo "debug=false" >> $GITHUB_OUTPUT
             echo "snapshot=true" >> $GITHUB_OUTPUT
+            echo "export-docker-images=false" >> $GITHUB_OUTPUT
             echo "should-run-tests=${{ steps.detect.outputs.has-changes }}" >> $GITHUB_OUTPUT
             echo "→ Automatic trigger: using change detection outputs"
           fi
@@ -162,6 +170,7 @@ jobs:
           iterations: '${{ needs.resolve-parameters.outputs.iterations }}'
           cache-dir: /srv/cache
           snapshot: ${{ needs.resolve-parameters.outputs.snapshot }}
+          export-docker-images: ${{ needs.resolve-parameters.outputs.export-docker-images }}
           force-matrix-rebuild: ${{ needs.resolve-parameters.outputs.force-matrix-rebuild }}
           force-image-rebuild: ${{ needs.resolve-parameters.outputs.force-image-rebuild }}
           debug: ${{ needs.resolve-parameters.outputs.debug }}

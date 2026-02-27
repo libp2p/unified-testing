@@ -48,8 +48,12 @@ create_snapshot() {
   fi
 
   # Step 7: Save Docker images (main + baseline)
-  print_message "Saving Docker images..."
-  save_docker_images_for_tests "${SNAPSHOT_DIR}" "${TEST_TYPE}"
+  if [ "${EXPORT_DOCKER_IMAGES}" == "true" ]; then
+    print_message "Saving Docker images..."
+    save_docker_images_for_tests "${SNAPSHOT_DIR}" "${TEST_TYPE}"
+  else
+    print_message "Skipping Docker image export (use --export-docker-images to include)"
+  fi
 
   # Step 9: Create settings.yaml
   print_message "Creating settings.yaml..."
@@ -185,12 +189,6 @@ copy_config_files() {
     cp "${test_pass_dir}/results.md" "${snapshot_dir}/" 2>/dev/null || true
     cp "${test_pass_dir}/results.html" "${snapshot_dir}/" 2>/dev/null || true
     cp "${test_pass_dir}/LATEST_TEST_RESULTS.md" "${snapshot_dir}/" 2>/dev/null || true
-
-    # Copy test-type-specific files
-    if [ "${test_type}" == "perf" ]; then
-      # Copy box plot images (generated as boxplot-{upload,download,latency}.png)
-      cp "${test_pass_dir}"/boxplot-*.png "${snapshot_dir}/" 2>/dev/null || true
-    fi
 
     # Copy log files
     if [ -d "${test_pass_dir}/logs" ] && [ "$(ls -A "${test_pass_dir}/logs" 2>/dev/null)" ]; then
