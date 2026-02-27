@@ -203,15 +203,23 @@ _emit_test() {
       id: ${d_id}
       imageName: ${d_img}
 EOF
-  [ -n "${d_commit}" ]       && echo "      snapshot: snapshots/${d_commit}.zip" >> "${dest}"
-  [ "${d_legacy}" == "true" ] && echo "      legacy: true" >> "${dest}"
+  if [ -n "${d_commit}" ]; then
+    echo "      snapshot: snapshots/${d_commit}.zip" >> "${dest}"
+  fi
+  if [ "${d_legacy}" == "true" ]; then
+    echo "      legacy: true" >> "${dest}"
+  fi
   cat >> "${dest}" <<EOF
     listener:
       id: ${l_id}
       imageName: ${l_img}
 EOF
-  [ -n "${l_commit}" ]       && echo "      snapshot: snapshots/${l_commit}.zip" >> "${dest}"
-  [ "${l_legacy}" == "true" ] && echo "      legacy: true" >> "${dest}"
+  if [ -n "${l_commit}" ]; then
+    echo "      snapshot: snapshots/${l_commit}.zip" >> "${dest}"
+  fi
+  if [ "${l_legacy}" == "true" ]; then
+    echo "      legacy: true" >> "${dest}"
+  fi
 }
 
 # ---------------------------------------------------------------------------
@@ -233,10 +241,18 @@ generate_tests_worker() {
   while IFS='|' read -r k v; do image_transports["${k}"]="${v}"; done < "${WORKER_DATA_DIR}/transports.dat"
   while IFS='|' read -r k v; do image_secure["${k}"]="${v}";     done < "${WORKER_DATA_DIR}/secure.dat"
   while IFS='|' read -r k v; do image_muxers["${k}"]="${v}";     done < "${WORKER_DATA_DIR}/muxers.dat"
-  [ -f "${WORKER_DATA_DIR}/protocols.dat" ] && while IFS='|' read -r k v; do image_protocols["${k}"]="${v}"; done < "${WORKER_DATA_DIR}/protocols.dat"
-  [ -f "${WORKER_DATA_DIR}/dial_only.dat" ] && while IFS='|' read -r k v; do image_dial_only["${k}"]="${v}"; done < "${WORKER_DATA_DIR}/dial_only.dat"
-  [ -f "${WORKER_DATA_DIR}/commits.dat"   ] && while IFS='|' read -r k v; do image_commit["${k}"]="${v}";   done < "${WORKER_DATA_DIR}/commits.dat"
-  [ -f "${WORKER_DATA_DIR}/legacy.dat"    ] && while IFS='|' read -r k v; do image_legacy["${k}"]="${v}";   done < "${WORKER_DATA_DIR}/legacy.dat"
+  if [ -f "${WORKER_DATA_DIR}/protocols.dat" ]; then
+    while IFS='|' read -r k v; do image_protocols["${k}"]="${v}"; done < "${WORKER_DATA_DIR}/protocols.dat"
+  fi
+  if [ -f "${WORKER_DATA_DIR}/dial_only.dat" ]; then
+    while IFS='|' read -r k v; do image_dial_only["${k}"]="${v}"; done < "${WORKER_DATA_DIR}/dial_only.dat"
+  fi
+  if [ -f "${WORKER_DATA_DIR}/commits.dat" ]; then
+    while IFS='|' read -r k v; do image_commit["${k}"]="${v}"; done < "${WORKER_DATA_DIR}/commits.dat"
+  fi
+  if [ -f "${WORKER_DATA_DIR}/legacy.dat" ]; then
+    while IFS='|' read -r k v; do image_legacy["${k}"]="${v}"; done < "${WORKER_DATA_DIR}/legacy.dat"
+  fi
 
   for dialer_id in "${dialer_chunk[@]}"; do
     local dialer_transports="${image_transports[${dialer_id}]}"
