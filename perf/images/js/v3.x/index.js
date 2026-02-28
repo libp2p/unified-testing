@@ -5,172 +5,168 @@ import { tcp } from '@libp2p/tcp'
 import { noise } from '@libp2p/noise'
 import { yamux } from '@libp2p/yamux'
 import { perf } from '@libp2p/perf'
-import yargs from 'yargs'
-import { hideBin } from 'yargs/helpers'
+import { multiaddr } from '@multiformats/multiaddr'
+import Redis from 'ioredis'
+import os from 'os'
 
-const argv = yargs(hideBin(process.argv))
-  .option('run-server', { type: 'boolean', default: false })
-  .option('server-address', { type: 'string' })
-  .option('transport', { type: 'string', default: 'tcp' })
-  .option('upload-bytes', { type: 'number', default: 1073741824 })
-  .option('download-bytes', { type: 'number', default: 1073741824 })
-  .option('upload-iterations', { type: 'number', default: 10 })
-  .option('download-iterations', { type: 'number', default: 10 })
-  .option('latency-iterations', { type: 'number', default: 100 })
-  .parse()
+// ── Environment variables ─────────────────────────────────────────────────────
+const IS_DIALER        = process.env.IS_DIALER === 'true'
+const REDIS_ADDR       = process.env.REDIS_ADDR       || 'perf-redis:6379'
+const TEST_KEY         = process.env.TEST_KEY         || 'testkey01'
+const TRANSPORT        = process.env.TRANSPORT        || 'tcp'
+const LISTENER_IP      = process.env.LISTENER_IP      || '0.0.0.0'
+const UPLOAD_BYTES     = parseInt(process.env.UPLOAD_BYTES     || '1073741824', 10)
+const DOWNLOAD_BYTES   = parseInt(process.env.DOWNLOAD_BYTES   || '1073741824', 10)
+const UPLOAD_ITERS     = parseInt(process.env.UPLOAD_ITERATIONS    || '10', 10)
+const DOWNLOAD_ITERS   = parseInt(process.env.DOWNLOAD_ITERATIONS  || '10', 10)
+const LATENCY_ITERS    = parseInt(process.env.LATENCY_ITERATIONS   || '100', 10)
+const DEBUG            = process.env.DEBUG === 'true'
 
-async function runServer() {
-  console.error('Starting perf server...')
+function dbg(...args) { if (DEBUG) console.error('[debug]', ...args) }
 
+// ── Redis helpers ──────────────────────────────────────────────────────────────
+function redisClient() {
+  const [host, port] = REDIS_ADDR.split(':')
+  return new Redis({ host, port: parseInt(port, 10), lazyConnect: true })
+}
+
+async function redisWait(client, key, pollMs = 500, timeoutMs = 120_000) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const val = await client.get(key)
+    if (val) return val
+    await new Promise(r => setTimeout(r, pollMs))
+  }
+  throw new Error(`Timeout waiting for Redis key: ${key}`)
+}
+
+// ── Non-localhost IP detection ────────────────────────────────────────────────
+function localNonLoopbackIP() {
+  for (const iface of Object.values(os.networkInterfaces()).flat()) {
+    if (!iface.internal && iface.family === 'IPv4') return iface.address
+  }
+  return '0.0.0.0'
+}
+
+// ── Listener (server) ────────────────────────────────────────────────────────
+async function runListener() {
+  console.error('Starting perf listener...')
+
+  const listenAddr = `/ip4/${LISTENER_IP}/tcp/4001`
   const node = await createLibp2p({
-    addresses: {
-      listen: ['/ip4/0.0.0.0/tcp/4001']
-    },
+    addresses: { listen: [listenAddr] },
     transports: [tcp()],
     connectionEncryption: [noise()],
     streamMuxers: [yamux()],
-    services: {
-      perf: perf()
-    }
+    services: { perf: perf() }
   })
 
   await node.start()
 
-  console.error('Server listening on:', node.getMultiaddrs())
-  console.error('Peer ID:', node.peerId.toString())
-  console.error('Perf server ready')
+  // Determine the publicly routable multiaddr
+  const ip = localNonLoopbackIP()
+  const ma = `/ip4/${ip}/tcp/4001/p2p/${node.peerId.toString()}`
+  console.error(`Listener address: ${ma}`)
 
-  // Keep running
+  // Publish to Redis so the dialer can find us
+  const redis = redisClient()
+  await redis.connect()
+  await redis.set(`${TEST_KEY}_listener_multiaddr`, ma)
+  await redis.quit()
+  console.error(`Published multiaddr to Redis key: ${TEST_KEY}_listener_multiaddr`)
+
+  // Keep running until Docker stops us
   await new Promise(() => {})
 }
 
-async function runClient() {
-  if (!argv['server-address']) {
-    console.error('Error: --server-address required in client mode')
-    process.exit(1)
-  }
-
-  console.error('Connecting to server:', argv['server-address'])
+// ── Dialer (client) ──────────────────────────────────────────────────────────
+async function runDialer() {
+  console.error('Starting perf dialer...')
+  dbg(`Upload: ${UPLOAD_BYTES} B × ${UPLOAD_ITERS}`)
+  dbg(`Download: ${DOWNLOAD_BYTES} B × ${DOWNLOAD_ITERS}`)
+  dbg(`Latency: ${LATENCY_ITERS} iterations`)
 
   const node = await createLibp2p({
     transports: [tcp()],
     connectionEncryption: [noise()],
     streamMuxers: [yamux()],
-    services: {
-      perf: perf()
-    }
+    services: { perf: perf() }
   })
 
   await node.start()
 
-  try {
-    // Connect to server
-    await node.dial(argv['server-address'])
-    console.error('Connected to server')
+  // Wait for listener multiaddr from Redis
+  const redis = redisClient()
+  await redis.connect()
+  console.error('Waiting for listener multiaddr from Redis...')
+  const listenerMa = await redisWait(redis, `${TEST_KEY}_listener_multiaddr`)
+  await redis.quit()
+  console.error(`Got listener multiaddr: ${listenerMa}`)
 
-    // Run measurements
-    console.error(`Running upload test (${argv['upload-iterations']} iterations)...`)
-    const uploadStats = await runMeasurement(argv['upload-bytes'], 0, argv['upload-iterations'])
+  // Dial the listener
+  const conn = await node.dial(multiaddr(listenerMa))
+  console.error('Connected to listener')
 
-    console.error(`Running download test (${argv['download-iterations']} iterations)...`)
-    const downloadStats = await runMeasurement(0, argv['download-bytes'], argv['download-iterations'])
+  const perfService = node.services.perf
 
-    console.error(`Running latency test (${argv['latency-iterations']} iterations)...`)
-    const latencyStats = await runMeasurement(1, 1, argv['latency-iterations'])
+  // Upload test
+  console.error(`Running upload test (${UPLOAD_ITERS} iterations, ${UPLOAD_BYTES} bytes each)...`)
+  const uploadResults = []
+  for (let i = 0; i < UPLOAD_ITERS; i++) {
+    for await (const result of perfService.measurePerformance(conn.remotePeer, UPLOAD_BYTES, 0)) {
+      uploadResults.push(result.uploadThroughput / 1_000_000_000) // bps → Gbps
+    }
+  }
 
-    // Output results as YAML
-    console.log('# Upload measurement')
-    console.log('upload:')
-    console.log(`  iterations: ${argv['upload-iterations']}`)
-    console.log(`  min: ${uploadStats.min.toFixed(2)}`)
-    console.log(`  q1: ${uploadStats.q1.toFixed(2)}`)
-    console.log(`  median: ${uploadStats.median.toFixed(2)}`)
-    console.log(`  q3: ${uploadStats.q3.toFixed(2)}`)
-    console.log(`  max: ${uploadStats.max.toFixed(2)}`)
-    printOutliers(uploadStats.outliers, 2)
-    console.log('  unit: Gbps')
-    console.log()
+  // Download test
+  console.error(`Running download test (${DOWNLOAD_ITERS} iterations, ${DOWNLOAD_BYTES} bytes each)...`)
+  const downloadResults = []
+  for (let i = 0; i < DOWNLOAD_ITERS; i++) {
+    for await (const result of perfService.measurePerformance(conn.remotePeer, 0, DOWNLOAD_BYTES)) {
+      downloadResults.push(result.downloadThroughput / 1_000_000_000) // bps → Gbps
+    }
+  }
 
-    console.log('# Download measurement')
-    console.log('download:')
-    console.log(`  iterations: ${argv['download-iterations']}`)
-    console.log(`  min: ${downloadStats.min.toFixed(2)}`)
-    console.log(`  q1: ${downloadStats.q1.toFixed(2)}`)
-    console.log(`  median: ${downloadStats.median.toFixed(2)}`)
-    console.log(`  q3: ${downloadStats.q3.toFixed(2)}`)
-    console.log(`  max: ${downloadStats.max.toFixed(2)}`)
-    printOutliers(downloadStats.outliers, 2)
-    console.log('  unit: Gbps')
-    console.log()
-
-    console.log('# Latency measurement')
-    console.log('latency:')
-    console.log(`  iterations: ${argv['latency-iterations']}`)
-    console.log(`  min: ${latencyStats.min.toFixed(3)}`)
-    console.log(`  q1: ${latencyStats.q1.toFixed(3)}`)
-    console.log(`  median: ${latencyStats.median.toFixed(3)}`)
-    console.log(`  q3: ${latencyStats.q3.toFixed(3)}`)
-    console.log(`  max: ${latencyStats.max.toFixed(3)}`)
-    printOutliers(latencyStats.outliers, 3)
-    console.log('  unit: ms')
-
-    console.error('All measurements complete!')
-  } catch (err) {
-    console.error('Test failed:', err.message)
-    process.exit(1)
+  // Latency test (1 byte up + 1 byte down = round-trip)
+  console.error(`Running latency test (${LATENCY_ITERS} iterations)...`)
+  const latencyResults = []
+  for (let i = 0; i < LATENCY_ITERS; i++) {
+    for await (const result of perfService.measurePerformance(conn.remotePeer, 1, 1)) {
+      // latency = time to transfer 2 bytes; use upload time as RTT proxy
+      latencyResults.push(result.timeSeconds * 1000) // s → ms
+    }
   }
 
   await node.stop()
+
+  // Output YAML results
+  const uploadStats   = calculateStats(uploadResults)
+  const downloadStats = calculateStats(downloadResults)
+  const latencyStats  = calculateStats(latencyResults)
+
+  console.log('# Measurements from dialer')
+  printStats('upload',   uploadStats,   UPLOAD_ITERS,   2, 'Gbps')
+  console.log()
+  printStats('download', downloadStats, DOWNLOAD_ITERS, 2, 'Gbps')
+  console.log()
+  printStats('latency',  latencyStats,  LATENCY_ITERS,  3, 'ms')
+
+  console.error('All measurements complete!')
 }
 
-async function runMeasurement(uploadBytes, downloadBytes, iterations) {
-  const values = []
-
-  for (let i = 0; i < iterations; i++) {
-    const start = Date.now()
-
-    // Placeholder: simulate transfer
-    // In real implementation, use libp2p perf protocol
-    await new Promise(resolve => setTimeout(resolve, 10))
-
-    const elapsed = (Date.now() - start) / 1000
-
-    // Calculate throughput if this is a throughput test
-    let value
-    if (uploadBytes > 100 || downloadBytes > 100) {
-      // Throughput in Gbps
-      const bytes = Math.max(uploadBytes, downloadBytes)
-      value = (bytes * 8) / elapsed / 1_000_000_000
-    } else {
-      // Latency in milliseconds
-      value = elapsed * 1000
-    }
-
-    values.push(value)
-  }
-
-  return calculateStats(values)
-}
-
+// ── Stats helpers ─────────────────────────────────────────────────────────────
 function calculateStats(values) {
   values.sort((a, b) => a - b)
-
   const n = values.length
   const min = values[0]
   const max = values[n - 1]
-
-  // Calculate percentiles
-  const q1 = percentile(values, 25.0)
+  const q1     = percentile(values, 25.0)
   const median = percentile(values, 50.0)
-  const q3 = percentile(values, 75.0)
-
-  // Calculate IQR and identify outliers
-  const iqr = q3 - q1
+  const q3     = percentile(values, 75.0)
+  const iqr    = q3 - q1
   const lowerFence = q1 - 1.5 * iqr
   const upperFence = q3 + 1.5 * iqr
-
   const outliers = values.filter(v => v < lowerFence || v > upperFence)
-
   return { min, q1, median, q3, max, outliers }
 }
 
@@ -179,33 +175,36 @@ function percentile(sortedValues, p) {
   const index = (p / 100.0) * (n - 1)
   const lower = Math.floor(index)
   const upper = Math.ceil(index)
-
-  if (lower === upper) {
-    return sortedValues[lower]
-  }
-
+  if (lower === upper) return sortedValues[lower]
   const weight = index - lower
   return sortedValues[lower] * (1.0 - weight) + sortedValues[upper] * weight
 }
 
-function printOutliers(outliers, decimals) {
-  if (outliers.length === 0) {
+function printStats(key, stats, iters, decimals, unit) {
+  console.log(`${key}:`)
+  console.log(`  iterations: ${iters}`)
+  console.log(`  min: ${stats.min.toFixed(decimals)}`)
+  console.log(`  q1: ${stats.q1.toFixed(decimals)}`)
+  console.log(`  median: ${stats.median.toFixed(decimals)}`)
+  console.log(`  q3: ${stats.q3.toFixed(decimals)}`)
+  console.log(`  max: ${stats.max.toFixed(decimals)}`)
+  if (stats.outliers.length === 0) {
     console.log('  outliers: []')
-    return
+  } else {
+    console.log(`  outliers: [${stats.outliers.map(v => v.toFixed(decimals)).join(', ')}]`)
   }
-
-  const formatted = outliers.map(v => v.toFixed(decimals)).join(', ')
-  console.log(`  outliers: [${formatted}]`)
+  console.log(`  unit: ${unit}`)
 }
 
-if (argv['run-server']) {
-  runServer().catch(err => {
-    console.error('Server error:', err)
+// ── Entry point ────────────────────────────────────────────────────────────────
+if (IS_DIALER) {
+  runDialer().catch(err => {
+    console.error('Dialer error:', err)
     process.exit(1)
   })
 } else {
-  runClient().catch(err => {
-    console.error('Client error:', err)
+  runListener().catch(err => {
+    console.error('Listener error:', err)
     process.exit(1)
   })
 }

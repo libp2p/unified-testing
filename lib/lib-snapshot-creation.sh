@@ -156,7 +156,7 @@ create_snapshot_directory() {
 # Args:
 #   $1: snapshot_dir - Target snapshot directory
 #   $2: test_pass_dir - Source test pass directory
-#   $3: test_type - Type of test (transport, hole-punch, perf)
+#   $3: test_type - Type of test (transport, hole-punch, perf, misc)
 copy_config_files() {
   local snapshot_dir="$1"
   local test_pass_dir="$2"
@@ -212,7 +212,7 @@ copy_config_files() {
 # Copy all scripts to snapshot
 # Args:
 #   $1: snapshot_dir - Target snapshot directory
-#   $2: test_type - Type of test (transport, hole-punch, perf)
+#   $2: test_type - Type of test (transport, hole-punch, perf, misc)
 copy_all_scripts() {
   local snapshot_dir="$1"
   local test_type="$2"
@@ -243,7 +243,7 @@ copy_all_scripts() {
 # Copy run.sh script to snapshot
 # Args:
 #   $1: snapshot_dir - Snapshot directory
-#   $2: test_type - Test type (transport, perf, hole-punch)
+#   $2: test_type - Test type (transport, perf, hole-punch, misc)
 copy_run_script() {
   local snapshot_dir="$1"
   local test_type="$2"
@@ -267,7 +267,7 @@ copy_run_script() {
 # Args:
 #   $1: snapshot_dir - Target snapshot directory
 #   $2: test_pass - Test pass name
-#   $3: test_type - Type of test (transport, hole-punch, perf)
+#   $3: test_type - Type of test (transport, hole-punch, perf, misc)
 #   $4: cache_dir - Cache directory used
 create_settings_yaml() {
   local snapshot_dir="$1"
@@ -348,6 +348,7 @@ generate_snapshot_readme() {
     transport) test_type_name="Transport Interoperability" ;;
     hole-punch) test_type_name="Hole Punch Interoperability" ;;
     perf) test_type_name="Performance Benchmark" ;;
+    misc) test_type_name="Misc Protocol Interoperability" ;;
     *) test_type_name="Test" ;;
   esac
 

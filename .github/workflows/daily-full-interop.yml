@@ -123,6 +123,12 @@ on:
         required: false
         default: false
         type: boolean
+      # Misc parameters (single input to stay within GitHub's 25-input limit)
+      misc-protocol-select:
+        description: '[Misc] Select specific protocols (pipe-separated, e.g. "ping|echo")'
+        required: false
+        default: ''
+        type: string
       # Upload control
       upload-results:
         description: 'Upload merged results to Filebase S3 bucket'
@@ -328,6 +334,67 @@ jobs:
             fi
           fi
 
+  resolve-misc-parameters:
+    runs-on: [self-hosted, linux, x64, ephemeral]
+    outputs:
+      test-select: ${{ steps.resolve.outputs.test-select }}
+      test-ignore: ${{ steps.resolve.outputs.test-ignore }}
+      protocol-select: ${{ steps.resolve.outputs.protocol-select }}
+      protocol-ignore: ${{ steps.resolve.outputs.protocol-ignore }}
+      force-matrix-rebuild: ${{ steps.resolve.outputs.force-matrix-rebuild }}
+      force-image-rebuild: ${{ steps.resolve.outputs.force-image-rebuild }}
+      debug: ${{ steps.resolve.outputs.debug }}
+      should-run-tests: ${{ steps.resolve.outputs.should-run-tests }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve misc parameters
+        id: resolve
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual trigger - only misc-protocol-select is exposed as a dispatch input
+            # (all other misc params use defaults to stay within GitHub's 25-input limit)
+            echo "test-select=" >> $GITHUB_OUTPUT
+            echo "test-ignore=~failing" >> $GITHUB_OUTPUT
+            echo "protocol-select=${{ github.event.inputs.misc-protocol-select }}" >> $GITHUB_OUTPUT
+            echo "protocol-ignore=" >> $GITHUB_OUTPUT
+            echo "force-matrix-rebuild=false" >> $GITHUB_OUTPUT
+            echo "force-image-rebuild=false" >> $GITHUB_OUTPUT
+            echo "debug=false" >> $GITHUB_OUTPUT
+            echo "should-run-tests=true" >> $GITHUB_OUTPUT
+            echo "→ Manual trigger: using workflow inputs for misc"
+          else
+            # Automatic trigger - check for changes in last 24 hours
+            CHANGES=$(git log --oneline --since="24 hours ago" -- "misc/**" | wc -l)
+            IMPLS_CHANGES=$(git log --oneline --since="24 hours ago" -- "misc/images.yaml" | wc -l)
+
+            echo "test-select=" >> $GITHUB_OUTPUT
+            echo "test-ignore=~failing" >> $GITHUB_OUTPUT
+            echo "protocol-select=" >> $GITHUB_OUTPUT
+            echo "protocol-ignore=~failing" >> $GITHUB_OUTPUT
+            echo "force-image-rebuild=false" >> $GITHUB_OUTPUT
+            echo "debug=false" >> $GITHUB_OUTPUT
+
+            if [ "$CHANGES" -gt 0 ]; then
+              echo "should-run-tests=true" >> $GITHUB_OUTPUT
+              if [ "$IMPLS_CHANGES" -gt 0 ]; then
+                echo "force-matrix-rebuild=true" >> $GITHUB_OUTPUT
+                echo "→ Automatic trigger: misc changes detected, images.yaml changed"
+              else
+                echo "force-matrix-rebuild=false" >> $GITHUB_OUTPUT
+                echo "→ Automatic trigger: misc changes detected"
+              fi
+            else
+              echo "should-run-tests=false" >> $GITHUB_OUTPUT
+              echo "force-matrix-rebuild=false" >> $GITHUB_OUTPUT
+              echo "→ Automatic trigger: no misc changes in last 24h"
+            fi
+          fi
+
   run-transport-full:
     needs: resolve-transport-parameters
     if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.resolve-transport-parameters.outputs.should-run-tests) }}
@@ -399,13 +466,36 @@ jobs:
           force-image-rebuild: ${{ needs.resolve-perf-parameters.outputs.force-image-rebuild }}
           debug: ${{ needs.resolve-perf-parameters.outputs.debug }}
 
+  run-misc-full:
+    needs: resolve-misc-parameters
+    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.resolve-misc-parameters.outputs.should-run-tests) }}
+    runs-on: [self-hosted, linux, x64, ephemeral]
+    continue-on-error: true
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run full misc protocol interop tests
+        uses: ./.github/actions/run-bash-misc-test
+        with:
+          test-select: '${{ needs.resolve-misc-parameters.outputs.test-select }}'
+          test-ignore: '${{ needs.resolve-misc-parameters.outputs.test-ignore }}'
+          protocol-select: '${{ needs.resolve-misc-parameters.outputs.protocol-select }}'
+          protocol-ignore: '${{ needs.resolve-misc-parameters.outputs.protocol-ignore }}'
+          cache-dir: /srv/cache
+          snapshot: true
+          force-matrix-rebuild: ${{ needs.resolve-misc-parameters.outputs.force-matrix-rebuild }}
+          force-image-rebuild: ${{ needs.resolve-misc-parameters.outputs.force-image-rebuild }}
+          debug: ${{ needs.resolve-misc-parameters.outputs.debug }}
+
   merge-and-upload-results:
-    needs: [run-transport-full, run-hole-punch-full, run-perf-full]
+    needs: [run-transport-full, run-hole-punch-full, run-perf-full, run-misc-full]
     if: |
       always() &&
       (needs.run-transport-full.result != 'skipped' ||
        needs.run-hole-punch-full.result != 'skipped' ||
-       needs.run-perf-full.result != 'skipped')
+       needs.run-perf-full.result != 'skipped' ||
+       needs.run-misc-full.result != 'skipped')
     runs-on: [self-hosted, linux, x64, ephemeral]
     steps:
       - name: Checkout code
@@ -438,6 +528,22 @@ jobs:
           path: /tmp/perf-results
           merge-multiple: true
 
+      - name: Download perf box plots
+        if: needs.run-perf-full.result != 'skipped'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: perf-test-box-plot-*
+          path: /tmp/perf-boxplots
+          merge-multiple: true
+
+      - name: Download misc test results
+        if: needs.run-misc-full.result != 'skipped'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: misc-test-results-*
+          path: /tmp/misc-results
+          merge-multiple: true
+
       - name: Debug artifact structures
         shell: bash
         run: |
@@ -467,6 +573,15 @@ jobs:
             yq eval '.baselineResults[0]' "$PERF_YAML" 2>/dev/null || echo "No baseline results found"
             echo "--- First test entry ---"
             yq eval '.testResults[0]' "$PERF_YAML" 2>/dev/null || echo "No test results found"
+          fi
+
+          echo ""
+          echo "=== Misc artifact ==="
+          find /tmp/misc-results -type f 2>/dev/null | head -20 || echo "No misc results found"
+          MISC_YAML=$(find /tmp/misc-results -name "results.yaml" 2>/dev/null | head -1)
+          if [ -n "$MISC_YAML" ] && [ -f "$MISC_YAML" ]; then
+            echo "--- First test entry ---"
+            yq eval '.tests[0]' "$MISC_YAML" 2>/dev/null || echo "No tests found"
           fi
 
       - name: Find result directories and prepare merge
@@ -510,6 +625,18 @@ jobs:
           echo "perf-dir=$PERF_DIR" >> $GITHUB_OUTPUT
           echo "→ Perf results: ${PERF_DIR:-not found}"
 
+          # Find misc results directory
+          MISC_DIR=""
+          if [ -d /tmp/misc-results ]; then
+            if [ -f /tmp/misc-results/results.yaml ]; then
+              MISC_DIR="/tmp/misc-results"
+            else
+              MISC_DIR=$(find /tmp/misc-results -name "results.yaml" -exec dirname {} \; | head -1)
+            fi
+          fi
+          echo "misc-dir=$MISC_DIR" >> $GITHUB_OUTPUT
+          echo "→ Misc results: ${MISC_DIR:-not found}"
+
       - name: Verify merge script version
         shell: bash
         run: |
@@ -542,6 +669,7 @@ jobs:
             "${{ steps.find-results.outputs.transport-dir }}" \
             "${{ steps.find-results.outputs.hole-punch-dir }}" \
             "${{ steps.find-results.outputs.perf-dir }}" \
+            "${{ steps.find-results.outputs.misc-dir }}" \
             "/tmp/merged-results/daily-full-interop.yml" \
             "$WORKFLOW_RUN_URL"
 
@@ -554,29 +682,26 @@ jobs:
           echo "=== Generated YAML content preview ==="
           head -100 /tmp/merged-results/daily-full-interop.yml
 
-      - name: Verify AWS CLI
+      - name: Install AWS CLI
         if: github.event_name != 'workflow_dispatch' || inputs.upload-results
         shell: bash
-        run: aws --version
-
-      - name: Configure AWS credentials for Filebase
-        if: github.event_name != 'workflow_dispatch' || inputs.upload-results
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.FILEBASE_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.FILEBASE_SECRET_KEY }}
-          AWS_DEFAULT_REGION: us-east-1   # Filebase ignores region, but required
         run: |
-          echo "AWS credentials exported as env vars"
-          aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
-          aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
-          aws configure set default.region $AWS_DEFAULT_REGION
-          aws configure list
+          if ! command -v aws &> /dev/null; then
+            echo "Installing AWS CLI..."
+            curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+            unzip -q /tmp/awscliv2.zip -d /tmp/aws-install
+            /tmp/aws-install/aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli --update
+            rm -rf /tmp/awscliv2.zip /tmp/aws-install
+          fi
+          aws --version
 
       - name: Upload results to Filebase
         if: github.event_name != 'workflow_dispatch' || inputs.upload-results
         shell: bash
         env:
-          AWS_EC2_METADATA_DISABLED: true
+          AWS_ACCESS_KEY_ID: ${{ secrets.FILEBASE_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.FILEBASE_SECRET_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
         run: |
           set -euo pipefail
 
@@ -597,16 +722,14 @@ jobs:
 
           # Upload as date-stamped archive
           echo "-> Uploading history/${DATE_STAMP}.yaml..."
-          aws --endpoint "$ENDPOINT" \
-            s3 cp "$RESULTS_FILE" \
-            "s3://${BUCKET}/history/${DATE_STAMP}.yaml" \
+          aws s3 cp "$RESULTS_FILE" "s3://${BUCKET}/history/${DATE_STAMP}.yaml" \
+            --endpoint-url "$ENDPOINT" \
             --content-type "application/x-yaml"
 
           # Upload as latest results (overwrite)
           echo "-> Uploading results.yaml (latest)..."
-          aws --endpoint "$ENDPOINT" \
-            s3 cp "$RESULTS_FILE" \
-            "s3://${BUCKET}/results.yaml" \
+          aws s3 cp "$RESULTS_FILE" "s3://${BUCKET}/results.yaml" \
+            --endpoint-url "$ENDPOINT" \
             --content-type "application/x-yaml"
 
           echo "Upload complete."

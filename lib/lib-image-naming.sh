@@ -6,7 +6,7 @@
 # Usage: get_image_name <test_type> <section> <id>
 #
 # Parameters:
-#   test_type: "transport", "hole-punch", or "perf"
+#   test_type: "transport", "hole-punch", "perf", or "misc"
 #   section: "implementations", "baselines", "relays", "routers"
 #   id: entity identifier (e.g., "rust-v0.56")
 #
@@ -17,6 +17,8 @@
 #     → "perf-implementations-rust-v0.56"
 #   get_image_name "hole-punch" "relays" "go-relay"
 #     → "hole-punch-relays-go-relay"
+#   get_image_name "misc" "implementations" "js-v3.x"
+#     → "misc-implementations-js-v3.x"
 get_image_name() {
     local test_type="${1}"
     local section="${2}"
@@ -24,7 +26,7 @@ get_image_name() {
 
     # Validate test_type
     case "${test_type}" in
-        transport|hole-punch|perf)
+        transport|hole-punch|perf|misc)
             ;;
         *)
             echo "Error: Unknown test type: ${test_type}" >&2
