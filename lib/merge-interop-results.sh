@@ -129,7 +129,20 @@ EOF
 
 else
     echo "  No transport results found"
-    echo "transport: null" >> "$OUTPUT_FILE"
+    cat >> "$OUTPUT_FILE" << 'TRANSPORT_EOF'
+transport:
+  metadata:
+    test-pass: ""
+    started-at: ""
+    completed-at: ""
+    duration: ""
+  summary:
+    total: 0
+    passed: 0
+    failed: 0
+  results:
+    []
+TRANSPORT_EOF
 fi
 
 # Process Hole-punch results
@@ -183,7 +196,20 @@ EOF
 
 else
     echo "  No hole-punch results found"
-    echo "hole-punch: null" >> "$OUTPUT_FILE"
+    cat >> "$OUTPUT_FILE" << 'HOLEPUNCH_EOF'
+hole-punch:
+  metadata:
+    test-pass: ""
+    started-at: ""
+    completed-at: ""
+    duration: ""
+  summary:
+    total: 0
+    passed: 0
+    failed: 0
+  results:
+    []
+HOLEPUNCH_EOF
 fi
 
 # Process Perf results
@@ -285,7 +311,25 @@ EOF
 
 else
     echo "  No perf results found"
-    echo "perf: null" >> "$OUTPUT_FILE"
+    cat >> "$OUTPUT_FILE" << 'PERF_EOF'
+perf:
+  metadata:
+    test-pass: ""
+    started-at: ""
+    completed-at: ""
+    duration: ""
+  summary:
+    baseline-total: 0
+    baseline-passed: 0
+    baseline-failed: 0
+    main-total: 0
+    main-passed: 0
+    main-failed: 0
+  baselines:
+    []
+  results:
+    []
+PERF_EOF
 fi
 
 echo ""

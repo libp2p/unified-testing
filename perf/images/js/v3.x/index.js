@@ -2,41 +2,82 @@
 
 import { createLibp2p } from 'libp2p'
 import { tcp } from '@libp2p/tcp'
-import { noise } from '@libp2p/noise'
-import { yamux } from '@libp2p/yamux'
-import { perf } from '@libp2p/perf'
-import yargs from 'yargs'
-import { hideBin } from 'yargs/helpers'
+import { tls } from '@libp2p/tls'
+import { mplex } from '@libp2p/mplex'
+import { webTransport } from '@libp2p/webtransport'
+import { noise } from '@chainsafe/libp2p-noise'
+import { yamux } from '@chainsafe/libp2p-yamux'
+import { createClient } from 'redis'
+import { multiaddr } from '@multiformats/multiaddr'
 
-const argv = yargs(hideBin(process.argv))
-  .option('run-server', { type: 'boolean', default: false })
-  .option('server-address', { type: 'string' })
-  .option('transport', { type: 'string', default: 'tcp' })
-  .option('upload-bytes', { type: 'number', default: 1073741824 })
-  .option('download-bytes', { type: 'number', default: 1073741824 })
-  .option('upload-iterations', { type: 'number', default: 10 })
-  .option('download-iterations', { type: 'number', default: 10 })
-  .option('latency-iterations', { type: 'number', default: 100 })
-  .parse()
+const isDialer = process.env.IS_DIALER === 'true'
+const redisAddr = process.env.REDIS_ADDR ?? 'redis:6379'
+const testKey = process.env.TEST_KEY ?? 'default'
+const transport = process.env.TRANSPORT ?? 'tcp'
+const secureChannel = process.env.SECURE_CHANNEL ?? 'noise'
+const muxer = process.env.MUXER ?? 'yamux'
+const uploadBytes = Number(process.env.UPLOAD_BYTES ?? 1073741824)
+const downloadBytes = Number(process.env.DOWNLOAD_BYTES ?? 1073741824)
+const uploadIterations = Number(process.env.UPLOAD_ITERATIONS ?? 10)
+const downloadIterations = Number(process.env.DOWNLOAD_ITERATIONS ?? 10)
+const latencyIterations = Number(process.env.LATENCY_ITERATIONS ?? 100)
+
+function getListenAddrs () {
+  if (transport === 'webtransport') {
+    return ['/ip4/0.0.0.0/udp/4001/quic-v1/webtransport']
+  }
+  return ['/ip4/0.0.0.0/tcp/4001']
+}
+
+function getTransports () {
+  if (transport === 'webtransport') {
+    return [webTransport()]
+  }
+  return [tcp()]
+}
+
+function getConnectionEncryption () {
+  if (secureChannel === 'tls') {
+    return [tls()]
+  }
+  return [noise()]
+}
+
+function getMuxers () {
+  if (muxer === 'mplex') {
+    return [mplex()]
+  }
+  return [yamux()]
+}
 
 async function runServer() {
   console.error('Starting perf server...')
 
   const node = await createLibp2p({
     addresses: {
-      listen: ['/ip4/0.0.0.0/tcp/4001']
+      listen: getListenAddrs()
     },
-    transports: [tcp()],
-    connectionEncryption: [noise()],
-    streamMuxers: [yamux()],
-    services: {
-      perf: perf()
-    }
+    transports: getTransports(),
+    connectionEncrypters: getConnectionEncryption(),
+    streamMuxers: getMuxers()
   })
 
   await node.start()
 
-  console.error('Server listening on:', node.getMultiaddrs())
+  const redis = createClient({ url: `redis://${redisAddr}` })
+  await redis.connect()
+  const listenerAddr = node.getMultiaddrs()
+    .map(a => a.toString())
+    .find(a => !a.includes('127.0.0.1') && !a.includes('0.0.0.0') && !a.includes('/p2p-circuit'))
+    ?? node.getMultiaddrs()[0]?.toString()
+  const fullAddr = listenerAddr.includes('/p2p/')
+    ? listenerAddr
+    : `${listenerAddr}/p2p/${node.peerId.toString()}`
+  const redisKey = `${testKey}_listener_multiaddr`
+  await redis.set(redisKey, fullAddr)
+  await redis.quit()
+
+  console.error('Server listening on:', fullAddr)
   console.error('Peer ID:', node.peerId.toString())
   console.error('Perf server ready')
 
@@ -45,43 +86,55 @@ async function runServer() {
 }
 
 async function runClient() {
-  if (!argv['server-address']) {
-    console.error('Error: --server-address required in client mode')
+  const redis = createClient({ url: `redis://${redisAddr}` })
+  await redis.connect()
+  const redisKey = `${testKey}_listener_multiaddr`
+
+  let serverAddress = ''
+  for (let i = 0; i < 60; i++) {
+    const val = await redis.get(redisKey)
+    if (val) {
+      serverAddress = val
+      break
+    }
+    await new Promise(resolve => setTimeout(resolve, 1000))
+  }
+  await redis.quit()
+
+  if (!serverAddress) {
+    console.error(`Error: timeout waiting for listener address in Redis key ${redisKey}`)
     process.exit(1)
   }
 
-  console.error('Connecting to server:', argv['server-address'])
+  console.error('Connecting to server:', serverAddress)
 
   const node = await createLibp2p({
-    transports: [tcp()],
-    connectionEncryption: [noise()],
-    streamMuxers: [yamux()],
-    services: {
-      perf: perf()
-    }
+    transports: getTransports(),
+    connectionEncrypters: getConnectionEncryption(),
+    streamMuxers: getMuxers()
   })
 
   await node.start()
 
   try {
     // Connect to server
-    await node.dial(argv['server-address'])
+    await node.dial(multiaddr(serverAddress))
     console.error('Connected to server')
 
     // Run measurements
-    console.error(`Running upload test (${argv['upload-iterations']} iterations)...`)
-    const uploadStats = await runMeasurement(argv['upload-bytes'], 0, argv['upload-iterations'])
+    console.error(`Running upload test (${uploadIterations} iterations)...`)
+    const uploadStats = await runMeasurement(uploadBytes, 0, uploadIterations)
 
-    console.error(`Running download test (${argv['download-iterations']} iterations)...`)
-    const downloadStats = await runMeasurement(0, argv['download-bytes'], argv['download-iterations'])
+    console.error(`Running download test (${downloadIterations} iterations)...`)
+    const downloadStats = await runMeasurement(0, downloadBytes, downloadIterations)
 
-    console.error(`Running latency test (${argv['latency-iterations']} iterations)...`)
-    const latencyStats = await runMeasurement(1, 1, argv['latency-iterations'])
+    console.error(`Running latency test (${latencyIterations} iterations)...`)
+    const latencyStats = await runMeasurement(1, 1, latencyIterations)
 
     // Output results as YAML
     console.log('# Upload measurement')
     console.log('upload:')
-    console.log(`  iterations: ${argv['upload-iterations']}`)
+    console.log(`  iterations: ${uploadIterations}`)
     console.log(`  min: ${uploadStats.min.toFixed(2)}`)
     console.log(`  q1: ${uploadStats.q1.toFixed(2)}`)
     console.log(`  median: ${uploadStats.median.toFixed(2)}`)
@@ -93,7 +146,7 @@ async function runClient() {
 
     console.log('# Download measurement')
     console.log('download:')
-    console.log(`  iterations: ${argv['download-iterations']}`)
+    console.log(`  iterations: ${downloadIterations}`)
     console.log(`  min: ${downloadStats.min.toFixed(2)}`)
     console.log(`  q1: ${downloadStats.q1.toFixed(2)}`)
     console.log(`  median: ${downloadStats.median.toFixed(2)}`)
@@ -105,7 +158,7 @@ async function runClient() {
 
     console.log('# Latency measurement')
     console.log('latency:')
-    console.log(`  iterations: ${argv['latency-iterations']}`)
+    console.log(`  iterations: ${latencyIterations}`)
     console.log(`  min: ${latencyStats.min.toFixed(3)}`)
     console.log(`  q1: ${latencyStats.q1.toFixed(3)}`)
     console.log(`  median: ${latencyStats.median.toFixed(3)}`)
@@ -116,7 +169,7 @@ async function runClient() {
 
     console.error('All measurements complete!')
   } catch (err) {
-    console.error('Test failed:', err.message)
+    console.error('Test failed:', err?.stack ?? err)
     process.exit(1)
   }
 
@@ -198,14 +251,14 @@ function printOutliers(outliers, decimals) {
   console.log(`  outliers: [${formatted}]`)
 }
 
-if (argv['run-server']) {
-  runServer().catch(err => {
-    console.error('Server error:', err)
+if (isDialer) {
+  runClient().catch(err => {
+    console.error('Client error:', err?.stack ?? err)
     process.exit(1)
   })
 } else {
-  runClient().catch(err => {
-    console.error('Client error:', err)
+  runServer().catch(err => {
+    console.error('Server error:', err?.stack ?? err)
     process.exit(1)
   })
 }

@@ -62,6 +62,11 @@ on:
         required: false
         default: '~failing'
         type: string
+      hole-punch-transport-ignore:
+        description: '[Hole-punch] Ignore transports (pipe-separated patterns)'
+        required: false
+        default: 'ws|webrtc-direct'
+        type: string
       hole-punch-force-matrix-rebuild:
         description: '[Hole-punch] Force test matrix regeneration'
         required: false
@@ -121,6 +126,11 @@ on:
       # Upload control
       upload-results:
         description: 'Upload merged results to Filebase S3 bucket'
+        required: false
+        default: false
+        type: boolean
+      export-docker-images:
+        description: 'Export Docker images in snapshot (enabled by default on schedule, disabled on manual)'
         required: false
         default: false
         type: boolean
@@ -195,6 +205,7 @@ jobs:
       relay-ignore: ${{ steps.resolve.outputs.relay-ignore }}
       router-select: ${{ steps.resolve.outputs.router-select }}
       router-ignore: ${{ steps.resolve.outputs.router-ignore }}
+      transport-ignore: ${{ steps.resolve.outputs.transport-ignore }}
       force-matrix-rebuild: ${{ steps.resolve.outputs.force-matrix-rebuild }}
       force-image-rebuild: ${{ steps.resolve.outputs.force-image-rebuild }}
       debug: ${{ steps.resolve.outputs.debug }}
@@ -217,6 +228,7 @@ jobs:
             echo "relay-ignore=${{ github.event.inputs.hole-punch-relay-ignore }}" >> $GITHUB_OUTPUT
             echo "router-select=${{ github.event.inputs.hole-punch-router-select }}" >> $GITHUB_OUTPUT
             echo "router-ignore=${{ github.event.inputs.hole-punch-router-ignore }}" >> $GITHUB_OUTPUT
+            echo "transport-ignore=${{ github.event.inputs.hole-punch-transport-ignore }}" >> $GITHUB_OUTPUT
             echo "force-matrix-rebuild=${{ github.event.inputs.hole-punch-force-matrix-rebuild }}" >> $GITHUB_OUTPUT
             echo "force-image-rebuild=${{ github.event.inputs.hole-punch-force-image-rebuild }}" >> $GITHUB_OUTPUT
             echo "debug=${{ github.event.inputs.hole-punch-debug }}" >> $GITHUB_OUTPUT
@@ -233,6 +245,7 @@ jobs:
             echo "relay-ignore=" >> $GITHUB_OUTPUT
             echo "router-select=" >> $GITHUB_OUTPUT
             echo "router-ignore=" >> $GITHUB_OUTPUT
+            echo "transport-ignore=ws|webrtc-direct" >> $GITHUB_OUTPUT
             echo "force-image-rebuild=false" >> $GITHUB_OUTPUT
             echo "debug=false" >> $GITHUB_OUTPUT
 
@@ -331,6 +344,7 @@ jobs:
           test-ignore: '${{ needs.resolve-transport-parameters.outputs.test-ignore }}'
           cache-dir: /srv/cache
           snapshot: true
+          export-docker-images: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.export-docker-images == 'true' }}
           force-matrix-rebuild: ${{ needs.resolve-transport-parameters.outputs.force-matrix-rebuild }}
           force-image-rebuild: ${{ needs.resolve-transport-parameters.outputs.force-image-rebuild }}
           debug: ${{ needs.resolve-transport-parameters.outputs.debug }}
@@ -353,8 +367,10 @@ jobs:
           relay-ignore: '${{ needs.resolve-hole-punch-parameters.outputs.relay-ignore }}'
           router-select: '${{ needs.resolve-hole-punch-parameters.outputs.router-select }}'
           router-ignore: '${{ needs.resolve-hole-punch-parameters.outputs.router-ignore }}'
+          transport-ignore: '${{ needs.resolve-hole-punch-parameters.outputs.transport-ignore }}'
           cache-dir: /srv/cache
           snapshot: true
+          export-docker-images: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.export-docker-images == 'true' }}
           force-matrix-rebuild: ${{ needs.resolve-hole-punch-parameters.outputs.force-matrix-rebuild }}
           force-image-rebuild: ${{ needs.resolve-hole-punch-parameters.outputs.force-image-rebuild }}
           debug: ${{ needs.resolve-hole-punch-parameters.outputs.debug }}
@@ -378,6 +394,7 @@ jobs:
           iterations: '${{ needs.resolve-perf-parameters.outputs.iterations }}'
           cache-dir: /srv/cache
           snapshot: true
+          export-docker-images: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.export-docker-images == 'true' }}
           force-matrix-rebuild: ${{ needs.resolve-perf-parameters.outputs.force-matrix-rebuild }}
           force-image-rebuild: ${{ needs.resolve-perf-parameters.outputs.force-image-rebuild }}
           debug: ${{ needs.resolve-perf-parameters.outputs.debug }}
@@ -396,6 +413,7 @@ jobs:
 
       - name: Download transport test results
         if: needs.run-transport-full.result != 'skipped'
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           pattern: transport-test-results-*
@@ -404,6 +422,7 @@ jobs:
 
       - name: Download hole-punch test results
         if: needs.run-hole-punch-full.result != 'skipped'
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           pattern: hole-punch-test-results-*
@@ -412,6 +431,7 @@ jobs:
 
       - name: Download perf test results
         if: needs.run-perf-full.result != 'skipped'
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           pattern: perf-test-results-*
@@ -448,7 +468,6 @@ jobs:
             echo "--- First test entry ---"
             yq eval '.testResults[0]' "$PERF_YAML" 2>/dev/null || echo "No test results found"
           fi
-
 
       - name: Find result directories and prepare merge
         id: find-results
@@ -535,31 +554,34 @@ jobs:
           echo "=== Generated YAML content preview ==="
           head -100 /tmp/merged-results/daily-full-interop.yml
 
-      - name: Install AWS CLI
+      - name: Verify AWS CLI
         if: github.event_name != 'workflow_dispatch' || inputs.upload-results
         shell: bash
+        run: aws --version
+
+      - name: Configure AWS credentials for Filebase
+        if: github.event_name != 'workflow_dispatch' || inputs.upload-results
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.FILEBASE_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.FILEBASE_SECRET_KEY }}
+          AWS_DEFAULT_REGION: us-east-1   # Filebase ignores region, but required
         run: |
-          if ! command -v aws &> /dev/null; then
-            echo "Installing AWS CLI..."
-            curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
-            unzip -q /tmp/awscliv2.zip -d /tmp/aws-install
-            /tmp/aws-install/aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli --update
-            rm -rf /tmp/awscliv2.zip /tmp/aws-install
-          fi
-          aws --version
+          echo "AWS credentials exported as env vars"
+          aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+          aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+          aws configure set default.region $AWS_DEFAULT_REGION
+          aws configure list
 
       - name: Upload results to Filebase
         if: github.event_name != 'workflow_dispatch' || inputs.upload-results
         shell: bash
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.FILEBASE_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.FILEBASE_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1
+          AWS_EC2_METADATA_DISABLED: true
         run: |
           set -euo pipefail
 
           RESULTS_FILE="/tmp/merged-results/daily-full-interop.yml"
-          BUCKET="test-plans-results"
+          BUCKET="results"
           ENDPOINT="https://s3.filebase.com"
           DATE_STAMP=$(date -u +"%Y-%m-%d")
 
@@ -575,14 +597,16 @@ jobs:
 
           # Upload as date-stamped archive
           echo "-> Uploading history/${DATE_STAMP}.yaml..."
-          aws s3 cp "$RESULTS_FILE" "s3://${BUCKET}/history/${DATE_STAMP}.yaml" \
-            --endpoint-url "$ENDPOINT" \
+          aws --endpoint "$ENDPOINT" \
+            s3 cp "$RESULTS_FILE" \
+            "s3://${BUCKET}/history/${DATE_STAMP}.yaml" \
             --content-type "application/x-yaml"
 
           # Upload as latest results (overwrite)
           echo "-> Uploading results.yaml (latest)..."
-          aws s3 cp "$RESULTS_FILE" "s3://${BUCKET}/results.yaml" \
-            --endpoint-url "$ENDPOINT" \
+          aws --endpoint "$ENDPOINT" \
+            s3 cp "$RESULTS_FILE" \
+            "s3://${BUCKET}/results.yaml" \
             --content-type "application/x-yaml"
 
           echo "Upload complete."
