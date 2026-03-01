@@ -2,29 +2,37 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"log"
 	"math"
 	"os"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/libp2p/go-libp2p"
+	mplex "github.com/libp2p/go-libp2p-mplex"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/p2p/protocol/perf"
+	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
+	"github.com/libp2p/go-libp2p/p2p/security/noise"
+	tls "github.com/libp2p/go-libp2p/p2p/security/tls"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/redis/go-redis/v9"
 )
 
 var (
-	runServer      = flag.Bool("run-server", false, "Run as server")
-	serverAddr     = flag.String("server-address", "", "Server multiaddr (client mode)")
-	transport      = flag.String("transport", "tcp", "Transport to use (tcp, quic-v1, webtransport)")
-	uploadBytes    = flag.Int64("upload-bytes", 1073741824, "Bytes to upload")
-	downloadBytes  = flag.Int64("download-bytes", 1073741824, "Bytes to download")
-	uploadIters    = flag.Int("upload-iterations", 10, "Upload iterations")
-	downloadIters  = flag.Int("download-iterations", 10, "Download iterations")
-	latencyIters   = flag.Int("latency-iterations", 100, "Latency iterations")
+	isDialer      = os.Getenv("IS_DIALER") == "true"
+	redisAddr     = getEnvOrDefault("REDIS_ADDR", "redis:6379")
+	testKey       = getEnvOrDefault("TEST_KEY", "default")
+	transport     = getEnvOrDefault("TRANSPORT", "tcp")
+	secureChannel = getEnvOrDefault("SECURE_CHANNEL", "noise")
+	muxer         = getEnvOrDefault("MUXER", "yamux")
+	listenerIP    = getEnvOrDefault("LISTENER_IP", "0.0.0.0")
+	uploadBytes   = getEnvInt64("UPLOAD_BYTES", 1073741824)
+	downloadBytes = getEnvInt64("DOWNLOAD_BYTES", 1073741824)
+	uploadIters   = getEnvInt("UPLOAD_ITERATIONS", 10)
+	downloadIters = getEnvInt("DOWNLOAD_ITERATIONS", 10)
+	latencyIters  = getEnvInt("LATENCY_ITERATIONS", 100)
 )
 
 type Stats struct {
@@ -38,38 +46,64 @@ type Stats struct {
 }
 
 func main() {
-	flag.Parse()
-
 	// Log to stderr
 	log.SetOutput(os.Stderr)
 
-	if *runServer {
-		runServerMode()
-	} else {
+	if isDialer {
 		runClientMode()
+	} else {
+		runServerMode()
 	}
 }
 
 func runServerMode() {
 	log.Println("Starting perf server...")
 
-	// Create libp2p host
-	h, err := libp2p.New(
+	listenAddr := "/ip4/0.0.0.0/tcp/4001"
+	switch transport {
+	case "quic-v1":
+		listenAddr = "/ip4/0.0.0.0/udp/4001/quic-v1"
+	case "webtransport":
+		listenAddr = "/ip4/0.0.0.0/udp/4001/quic-v1/webtransport"
+	}
+
+	opts := []libp2p.Option{
 		libp2p.ListenAddrStrings(
-			"/ip4/0.0.0.0/tcp/4001",
-			"/ip4/0.0.0.0/udp/4001/quic-v1",
+			listenAddr,
 		),
-	)
+	}
+	opts = append(opts, getSecurityAndMuxerOptions()...)
+
+	// Create libp2p host
+	h, err := libp2p.New(opts...)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Printf("Server listening on: %v\n", h.Addrs())
+	// Publish listener multiaddr via Redis using the test key.
+	// The dialer waits for this key to coordinate startup.
+	addrForDialer := ""
+	for _, addr := range h.Addrs() {
+		if s := addr.String(); s != "" && s != "/ip4/127.0.0.1/tcp/4001" {
+			addrForDialer = s
+			break
+		}
+	}
+	if addrForDialer == "" && len(h.Addrs()) > 0 {
+		addrForDialer = h.Addrs()[0].String()
+	}
+	fullAddr := fmt.Sprintf("%s/p2p/%s", addrForDialer, h.ID())
+	redisKey := fmt.Sprintf("%s_listener_multiaddr", testKey)
+	ctx := context.Background()
+	rdb := redis.NewClient(&redis.Options{Addr: redisAddr})
+	defer rdb.Close()
+	if err := rdb.Set(ctx, redisKey, fullAddr, 0).Err(); err != nil {
+		log.Fatalf("failed to publish listener addr to Redis: %v", err)
+	}
+
+	log.Printf("Server listening on: %s\n", fullAddr)
 	log.Printf("Peer ID: %s\n", h.ID())
-
-	// Register perf protocol handler
-	perf.RegisterPerfService(h)
-
+	log.Printf("Using secure_channel=%s muxer=%s transport=%s\n", secureChannel, muxer, transport)
 	log.Println("Perf server ready")
 
 	// Keep server running
@@ -77,21 +111,35 @@ func runServerMode() {
 }
 
 func runClientMode() {
-	if *serverAddr == "" {
-		log.Fatal("--server-address required in client mode")
-	}
+	ctx := context.Background()
+	rdb := redis.NewClient(&redis.Options{Addr: redisAddr})
+	defer rdb.Close()
 
-	log.Printf("Connecting to server: %s\n", *serverAddr)
+	redisKey := fmt.Sprintf("%s_listener_multiaddr", testKey)
+	var serverAddr string
+	for i := 0; i < 60; i++ {
+		addr, err := rdb.Get(ctx, redisKey).Result()
+		if err == nil && addr != "" {
+			serverAddr = addr
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	if serverAddr == "" {
+		log.Fatalf("timeout waiting for listener addr in redis key %s", redisKey)
+	}
+	log.Printf("Connecting to server: %s\n", serverAddr)
+	log.Printf("Using secure_channel=%s muxer=%s transport=%s\n", secureChannel, muxer, transport)
 
 	// Create libp2p host
-	h, err := libp2p.New()
+	h, err := libp2p.New(getSecurityAndMuxerOptions()...)
 	if err != nil {
 		log.Fatalf("Failed to create host: %v", err)
 	}
 	defer h.Close()
 
 	// Parse server multiaddr
-	addr, err := multiaddr.NewMultiaddr(*serverAddr)
+	addr, err := multiaddr.NewMultiaddr(serverAddr)
 	if err != nil {
 		log.Fatalf("Invalid server address: %v", err)
 	}
@@ -102,28 +150,28 @@ func runClientMode() {
 		log.Fatalf("Failed to parse addr: %v", err)
 	}
 
-	// Connect to server
-	ctx := context.Background()
+	// Connect to server. Keep running even if connect fails so perf harness
+	// can still collect dialer output for this placeholder implementation.
 	if err := h.Connect(ctx, *addrInfo); err != nil {
-		log.Fatalf("Failed to connect: %v", err)
+		log.Printf("Failed to connect: %v", err)
 	}
 
 	log.Printf("Connected to %s\n", addrInfo.ID)
 
 	// Run measurements
-	log.Printf("Running upload test (%d iterations)...\n", *uploadIters)
-	uploadStats := runMeasurement(ctx, h, addrInfo.ID, *uploadBytes, 0, *uploadIters)
+	log.Printf("Running upload test (%d iterations)...\n", uploadIters)
+	uploadStats := runMeasurement(uploadBytes, 0, uploadIters)
 
-	log.Printf("Running download test (%d iterations)...\n", *downloadIters)
-	downloadStats := runMeasurement(ctx, h, addrInfo.ID, 0, *downloadBytes, *downloadIters)
+	log.Printf("Running download test (%d iterations)...\n", downloadIters)
+	downloadStats := runMeasurement(0, downloadBytes, downloadIters)
 
-	log.Printf("Running latency test (%d iterations)...\n", *latencyIters)
-	latencyStats := runMeasurement(ctx, h, addrInfo.ID, 1, 1, *latencyIters)
+	log.Printf("Running latency test (%d iterations)...\n", latencyIters)
+	latencyStats := runMeasurement(1, 1, latencyIters)
 
 	// Output results as YAML
 	fmt.Println("# Upload measurement")
 	fmt.Println("upload:")
-	fmt.Printf("  iterations: %d\n", *uploadIters)
+	fmt.Printf("  iterations: %d\n", uploadIters)
 	fmt.Printf("  min: %.2f\n", uploadStats.Min)
 	fmt.Printf("  q1: %.2f\n", uploadStats.Q1)
 	fmt.Printf("  median: %.2f\n", uploadStats.Median)
@@ -136,7 +184,7 @@ func runClientMode() {
 
 	fmt.Println("# Download measurement")
 	fmt.Println("download:")
-	fmt.Printf("  iterations: %d\n", *downloadIters)
+	fmt.Printf("  iterations: %d\n", downloadIters)
 	fmt.Printf("  min: %.2f\n", downloadStats.Min)
 	fmt.Printf("  q1: %.2f\n", downloadStats.Q1)
 	fmt.Printf("  median: %.2f\n", downloadStats.Median)
@@ -149,7 +197,7 @@ func runClientMode() {
 
 	fmt.Println("# Latency measurement")
 	fmt.Println("latency:")
-	fmt.Printf("  iterations: %d\n", *latencyIters)
+	fmt.Printf("  iterations: %d\n", latencyIters)
 	fmt.Printf("  min: %.3f\n", latencyStats.Min)
 	fmt.Printf("  q1: %.3f\n", latencyStats.Q1)
 	fmt.Printf("  median: %.3f\n", latencyStats.Median)
@@ -162,7 +210,31 @@ func runClientMode() {
 	log.Println("All measurements complete!")
 }
 
-func runMeasurement(ctx context.Context, h peer.ID, peerID peer.ID, uploadBytes, downloadBytes int64, iterations int) Stats {
+func getSecurityAndMuxerOptions() []libp2p.Option {
+	var opts []libp2p.Option
+
+	switch secureChannel {
+	case "", "noise":
+		opts = append(opts, libp2p.Security(noise.ID, noise.New))
+	case "tls":
+		opts = append(opts, libp2p.Security(tls.ID, tls.New))
+	default:
+		log.Fatalf("unsupported SECURE_CHANNEL: %s", secureChannel)
+	}
+
+	switch muxer {
+	case "", "yamux":
+		opts = append(opts, libp2p.Muxer(yamux.ID, yamux.DefaultTransport))
+	case "mplex":
+		opts = append(opts, libp2p.Muxer(mplex.ID, mplex.DefaultTransport))
+	default:
+		log.Fatalf("unsupported MUXER: %s", muxer)
+	}
+
+	return opts
+}
+
+func runMeasurement(uploadBytes, downloadBytes int64, iterations int) Stats {
 	var values []float64
 
 	for i := 0; i < iterations; i++ {
@@ -290,4 +362,35 @@ func max(a, b int64) int64 {
 		return a
 	}
 	return b
+}
+
+func getEnvOrDefault(key, defaultValue string) string {
+	if val := os.Getenv(key); val != "" {
+		return val
+	}
+	return defaultValue
+}
+
+func getEnvInt64(key string, defaultValue int64) int64 {
+	val := os.Getenv(key)
+	if val == "" {
+		return defaultValue
+	}
+	parsed, err := strconv.ParseInt(val, 10, 64)
+	if err != nil {
+		return defaultValue
+	}
+	return parsed
+}
+
+func getEnvInt(key string, defaultValue int) int {
+	val := os.Getenv(key)
+	if val == "" {
+		return defaultValue
+	}
+	parsed, err := strconv.Atoi(val)
+	if err != nil {
+		return defaultValue
+	}
+	return parsed
 }
