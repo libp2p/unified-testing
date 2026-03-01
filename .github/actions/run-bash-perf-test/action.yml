@@ -131,7 +131,7 @@ runs:
 
         ./run.sh \
           --impl-select '${{ inputs.test-select }}' \
-          --impl-ignore '${{ inputs.test-ignore }}' \
+          --test-ignore '${{ inputs.test-ignore }}' \
           --baseline-select '${{ inputs.baseline-select }}' \
           --baseline-ignore '${{ inputs.baseline-ignore }}' \
           --cache-dir '${{ inputs.cache-dir }}' \
