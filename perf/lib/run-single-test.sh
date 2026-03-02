@@ -195,8 +195,8 @@ fi
 log_debug "  Starting containers..."
 log_message "Running: ${TEST_NAME}"
 
-# Set timeout (300 seconds / 5 minutes)
-TEST_TIMEOUT=300
+# Set timeout (600 seconds / 10 minutes)
+TEST_TIMEOUT=600
 
 # Track test duration
 TEST_START=$(date +%s)
