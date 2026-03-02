@@ -67,7 +67,6 @@ Check dependencies:
 - Standard UNIX utilities (see [lib/check-dependencies.sh](../lib/check-dependencies.sh) for complete list)
 
 **Optional dependencies** (for advanced features):
-- gnuplot 5.0+ (for performance charts)
 - pandoc (for HTML report generation)
 
 ### Basic Usage

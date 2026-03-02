@@ -21,9 +21,8 @@ use libp2p::{
 use libp2p_mplex as mplex;
 use libp2p_webrtc as webrtc;
 use redis::AsyncCommands;
-use std::{env, str};
+use std::{env, str, time::{Duration, Instant}};
 use strum::{Display, EnumString};
-use tokio::time::Duration;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -221,20 +220,11 @@ async fn run_listener(
     swarm
         .listen_on(relayed_listener_addr.clone())
         .expect("failed to listen on p2p circuit");
-    
-    // Publish to Redis with TEST_KEY namespacing
-    let listener_peer_id_key = format!("{test_key}_listener_peer_id");
-    let _: () = con
-        .set(&listener_peer_id_key, relayed_listener_addr.to_string())
-        .await
-        .expect(&format!(
-            "Failed to publish peer id to Redis: (key: {listener_peer_id_key})"
-        ));
-    eprintln!("Published peer id to Redis (key: {listener_peer_id_key})");
 
+    let mut published_to_redis = false;
     let mut hole_punch_connection_id = None;
 
-    // Wait for our listen to be ready and publish multiaddr
+    // Wait for reservation acceptance, then publish peer id and wait for hole-punch
     loop {
         if let Some(event) = swarm.next().await {
             match event {
@@ -244,10 +234,25 @@ async fn run_listener(
                 } => {
                     eprintln!("Listener_id: {listener_id}, address: {address}");
                 }
+                swarm::SwarmEvent::NewExternalAddrCandidate { address } => {
+                    eprintln!("New external address candidate: {address}");
+                    swarm.add_external_address(address);
+                }
                 swarm::SwarmEvent::Behaviour(BehaviourEvent::RelayClient(
                     relay::client::Event::ReservationReqAccepted { .. },
                 )) => {
                     eprintln!("Relay accepted our reservation request");
+                    if !published_to_redis {
+                        let listener_peer_id_key = format!("{test_key}_listener_peer_id");
+                        let _: () = con
+                            .set(&listener_peer_id_key, peer_id.to_string())
+                            .await
+                            .expect(&format!(
+                                "Failed to publish peer id to Redis: (key: {listener_peer_id_key})"
+                            ));
+                        eprintln!("Published peer id to Redis (key: {listener_peer_id_key})");
+                        published_to_redis = true;
+                    }
                 }
                 swarm::SwarmEvent::Behaviour(BehaviourEvent::RelayClient(
                     relay::client::Event::InboundCircuitEstablished { src_peer_id, .. },
@@ -282,7 +287,8 @@ async fn run_listener(
                                 "Recevied ping over hole-punch connection: {}",
                                 rtt.as_micros() as f32 / 1000.
                             );
-                            return Ok(());
+                            // Don't return - let the event loop continue.
+                            // The dialer will exit first, triggering docker-compose to stop us.
                         }
                         Err(e) if Some(connection) == hole_punch_connection_id => {
                             bail!("Ping failed over hole-punch connection {e:?}");
@@ -294,6 +300,12 @@ async fn run_listener(
                     peer_id, endpoint, ..
                 } => {
                     eprintln!("New connection from {peer_id} details: {endpoint:?}");
+                }
+                swarm::SwarmEvent::OutgoingConnectionError { peer_id, error, .. } => {
+                    eprintln!("Outgoing connection error to {peer_id:?}: {error:?}");
+                }
+                swarm::SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
+                    eprintln!("Connection closed with {peer_id}: {cause:?}");
                 }
                 other => {
                     if debug {
@@ -412,6 +424,10 @@ async fn run_dialer(
                 })) => {
                     sent_observed_addr = true;
                 }
+                swarm::SwarmEvent::NewExternalAddrCandidate { address } => {
+                    eprintln!("Dialer new external address candidate: {address}");
+                    my_observed_addr = Some(address);
+                }
                 swarm::SwarmEvent::Behaviour(BehaviourEvent::Identify(identify::Event::Received {
                     info: identify::Info { observed_addr, .. },
                     ..
@@ -431,12 +447,13 @@ async fn run_dialer(
         }
     };
 
-    eprintln!("Listener observed multiaddr: {external_addr}");
+    eprintln!("Dialer observed multiaddr: {external_addr}");
 
     // Wait for listener peer id (with retries)
     let listener_peer_id = wait_for_peer_id(&mut con, &format!("{test_key}_listener_peer_id")).await?;
 
-    // Step 4: Listen on the relayed circuit
+    // Step 4: Dial the listener through the relay circuit
+    let dcutr_start = Instant::now();
     swarm
         .dial(relay_addr
             .with(Protocol::P2pCircuit)
@@ -444,11 +461,16 @@ async fn run_dialer(
         .expect("failed to dial on p2p circuit");
 
     let mut hole_punch_connection_id = None;
+    let mut dcutr_elapsed: Option<std::time::Duration> = None;
 
-    // Wait for our listen to be ready and publish multiaddr
+    // Wait for hole-punch to complete
     loop {
         if let Some(event) = swarm.next().await {
             match event {
+                swarm::SwarmEvent::NewExternalAddrCandidate { address } => {
+                    eprintln!("Dialer new external address candidate: {address}");
+                    swarm.add_external_address(address);
+                }
                 swarm::SwarmEvent::Behaviour(BehaviourEvent::RelayClient(
                     relay::client::Event::ReservationReqAccepted { .. },
                 )) => {
@@ -467,6 +489,7 @@ async fn run_dialer(
                 )) => {
                     match result {
                         Ok(connection_id) => {
+                            dcutr_elapsed = Some(dcutr_start.elapsed());
                             eprintln!("dcutr to {remote_peer_id} succeeded!!");
                             hole_punch_connection_id = Some(connection_id);
                         }
@@ -483,10 +506,18 @@ async fn run_dialer(
                 )) => {
                     match result {
                         Ok(rtt) if Some(connection) == hole_punch_connection_id => {
+                            let ping_rtt_ms = rtt.as_micros() as f64 / 1000.0;
+                            let handshake_ms = dcutr_elapsed
+                                .map(|d| d.as_micros() as f64 / 1000.0)
+                                .unwrap_or(0.0) + ping_rtt_ms;
                             eprintln!(
-                                "Recevied ping over hole-punch connection: {}",
-                                rtt.as_micros() as f32 / 1000.
+                                "Received ping over hole-punch connection: {:.2}ms",
+                                ping_rtt_ms,
                             );
+                            println!("latency:");
+                            println!("  handshake_plus_one_rtt: {:.2}", handshake_ms);
+                            println!("  ping_rtt: {:.2}", ping_rtt_ms);
+                            println!("  unit: ms");
                             return Ok(());
                         }
                         Err(e) if Some(connection) == hole_punch_connection_id => {
@@ -499,6 +530,12 @@ async fn run_dialer(
                     peer_id, endpoint, ..
                 } => {
                     eprintln!("New connection from {peer_id} details: {endpoint:?}");
+                }
+                swarm::SwarmEvent::OutgoingConnectionError { peer_id, error, .. } => {
+                    eprintln!("Outgoing connection error to {peer_id:?}: {error:?}");
+                }
+                swarm::SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
+                    eprintln!("Connection closed with {peer_id}: {cause:?}");
                 }
                 other => {
                     if debug {
@@ -524,6 +561,7 @@ async fn build_swarm<B: swarm::NetworkBehaviour>(
                 .with_quic()
                 .with_relay_client(noise::Config::new, yamux::Config::default)?
                 .with_behaviour(behaviour_constructor)?
+                .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(30)))
                 .build(),
             listen_ip
                 .and_then(|ip| format!("/ip4/{ip}/udp/0/quic-v1").parse().ok()),
@@ -538,6 +576,7 @@ async fn build_swarm<B: swarm::NetworkBehaviour>(
                 )?
                 .with_relay_client(tls::Config::new, mplex::Config::default)?
                 .with_behaviour(behaviour_constructor)?
+                .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(30)))
                 .build(),
             listen_ip
                 .and_then(|ip| format!("/ip4/{ip}/tcp/0").parse().ok()),
@@ -552,6 +591,7 @@ async fn build_swarm<B: swarm::NetworkBehaviour>(
                 )?
                 .with_relay_client(tls::Config::new, yamux::Config::default)?
                 .with_behaviour(behaviour_constructor)?
+                .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(30)))
                 .build(),
             listen_ip
                 .and_then(|ip| format!("/ip4/{ip}/tcp/0").parse().ok()),
@@ -566,6 +606,7 @@ async fn build_swarm<B: swarm::NetworkBehaviour>(
                 )?
                 .with_relay_client(noise::Config::new, mplex::Config::default)?
                 .with_behaviour(behaviour_constructor)?
+                .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(30)))
                 .build(),
             listen_ip
                 .and_then(|ip| format!("/ip4/{ip}/tcp/0").parse().ok()),
@@ -580,6 +621,7 @@ async fn build_swarm<B: swarm::NetworkBehaviour>(
                 )?
                 .with_relay_client(noise::Config::new, yamux::Config::default)?
                 .with_behaviour(behaviour_constructor)?
+                .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(30)))
                 .build(),
             listen_ip
                 .and_then(|ip| format!("/ip4/{ip}/tcp/0").parse().ok()),
@@ -591,6 +633,7 @@ async fn build_swarm<B: swarm::NetworkBehaviour>(
                 .await?
                 .with_relay_client(tls::Config::new, mplex::Config::default)?
                 .with_behaviour(behaviour_constructor)?
+                .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(30)))
                 .build(),
             listen_ip
                 .and_then(|ip| format!("/ip4/{ip}/tcp/0/ws").parse().ok()),
@@ -602,6 +645,7 @@ async fn build_swarm<B: swarm::NetworkBehaviour>(
                 .await?
                 .with_relay_client(tls::Config::new, yamux::Config::default)?
                 .with_behaviour(behaviour_constructor)?
+                .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(30)))
                 .build(),
             listen_ip
                 .and_then(|ip| format!("/ip4/{ip}/tcp/0/ws").parse().ok()),
@@ -613,6 +657,7 @@ async fn build_swarm<B: swarm::NetworkBehaviour>(
                 .await?
                 .with_relay_client(noise::Config::new, mplex::Config::default)?
                 .with_behaviour(behaviour_constructor)?
+                .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(30)))
                 .build(),
             listen_ip
                 .and_then(|ip| format!("/ip4/{ip}/tcp/0/ws").parse().ok()),
@@ -624,6 +669,7 @@ async fn build_swarm<B: swarm::NetworkBehaviour>(
                 .await?
                 .with_relay_client(noise::Config::new, yamux::Config::default)?
                 .with_behaviour(behaviour_constructor)?
+                .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(30)))
                 .build(),
             listen_ip
                 .and_then(|ip| format!("/ip4/{ip}/tcp/0/ws").parse().ok()),
@@ -639,6 +685,7 @@ async fn build_swarm<B: swarm::NetworkBehaviour>(
                 })?
                 .with_relay_client(noise::Config::new, yamux::Config::default)?
                 .with_behaviour(behaviour_constructor)?
+                .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(30)))
                 .build(),
             listen_ip
                 .and_then(|ip| format!("/ip4/{ip}/udp/0/webrtc-direct").parse().ok()),

@@ -292,35 +292,63 @@ async fn run_dialer(
     let peer_id = *swarm.local_peer_id();
     eprintln!("Peer ID: {peer_id}");
 
-    // Dial listener
-    eprintln!("Dialing listener at: {listener_addr}");
-    swarm.dial(listener_addr.clone()).expect("Failed to dial");
+    // Dial listener with retries. webrtc-direct can briefly report NoListeners
+    // right after address publication while ICE/listener state settles.
+    let max_attempts = 5;
+    let connected_peer_id = {
+        let mut last_error = String::new();
+        let mut connected = None;
 
-    // Wait for connection to be established
-    let connected_peer_id = loop {
-        if let Some(event) = swarm.next().await {
-            match event {
-                swarm::SwarmEvent::ConnectionEstablished {
-                    peer_id,
-                    connection_id,
-                    ..
-                } => {
-                    eprintln!(
-                        "Connected to listener: {peer_id} (connection: {connection_id:?})"
-                    );
-                    break peer_id;
-                }
-                swarm::SwarmEvent::OutgoingConnectionError { error, .. } => {
-                    eprintln!("Failed to connect: {error:?}");
-                    std::process::exit(1);
-                }
-                other => {
-                    if debug {
-                        eprintln!("{other:?}");
+        for attempt in 1..=max_attempts {
+            eprintln!(
+                "Dial attempt {attempt}/{max_attempts} to listener at: {listener_addr}"
+            );
+            swarm
+                .dial(listener_addr.clone())
+                .expect("Failed to initiate dial");
+
+            loop {
+                if let Some(event) = swarm.next().await {
+                    match event {
+                        swarm::SwarmEvent::ConnectionEstablished {
+                            peer_id,
+                            connection_id,
+                            ..
+                        } => {
+                            eprintln!(
+                                "Connected to listener: {peer_id} (connection: {connection_id:?})"
+                            );
+                            connected = Some(peer_id);
+                            break;
+                        }
+                        swarm::SwarmEvent::OutgoingConnectionError { error, .. } => {
+                            last_error = format!("{error:?}");
+                            eprintln!("Dial attempt {attempt} failed: {last_error}");
+                            break;
+                        }
+                        other => {
+                            if debug {
+                                eprintln!("{other:?}");
+                            }
+                        }
                     }
                 }
             }
+
+            if connected.is_some() {
+                break;
+            }
+
+            if attempt < max_attempts {
+                tokio::time::sleep(Duration::from_millis(750)).await;
+            }
         }
+
+        connected.with_context(|| {
+            format!(
+                "failed to connect after {max_attempts} attempts; last error: {last_error}"
+            )
+        })?
     };
 
     eprintln!("Connection established successfully");
