@@ -9,7 +9,9 @@ test-aliases:
   - alias: "none"
     value: "!~all"
   - alias: "images"
-    value: "dotnet-v1.0|go-v0.45|js-v3.x|rust-v0.56"
+    value: "dotnet-v1.0|go-v0.45|js-v3.x|python-v0.x|rust-v0.56"
+  - alias: "python"
+    value: "python-v0.x"
   - alias: "baselines"
     value: "https|quic-go|iperf"
   - alias: "go"
@@ -96,3 +98,22 @@ implementations:
     secureChannels: [noise, tls]
     muxers: [yamux]
 
+  # Python implementation (github snapshot; Dockerfile uses repo-root context like interop/transport)
+  - id: python-v0.x
+    source:
+      type: github
+      repo: sumanjeet0012/py-libp2p
+      commit: b688aa83fc765432ed3986640c581e77a8d15cb2
+      dockerfile: interop/perf/Dockerfile
+    transports: [quic-v1, tcp, ws]
+    secureChannels: [noise, tls]
+    muxers: [yamux, mplex]
+  # Local python config (same Dockerfile; context = repo root = images/python/v0.x/py-libp2p)
+  # - id: python-v0.x
+  #   source:
+  #     type: local
+  #     path: images/python/v0.x/py-libp2p
+  #     dockerfile: interop/perf/Dockerfile
+  #   transports: [quic-v1, tcp, ws]
+  #   secureChannels: [noise, tls]
+  #   muxers: [yamux, mplex]
