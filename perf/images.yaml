@@ -102,8 +102,8 @@ implementations:
   - id: python-v0.x
     source:
       type: github
-      repo: libp2p/py-libp2p
-      commit: 5eded13c516380ba42aa5432a437ff7b228454cc 
+      repo: sumanjeet0012/py-libp2p
+      commit: eba02aa2113f4d0ae010a2816b2a101d66388811 
       dockerfile: interop/perf/Dockerfile
     transports: [quic-v1, tcp, ws]
     secureChannels: [noise, tls]
