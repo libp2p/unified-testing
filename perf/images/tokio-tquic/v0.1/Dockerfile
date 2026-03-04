@@ -16,9 +16,9 @@ RUN cargo chef cook --release --recipe-path recipe.json
 # Build application
 COPY . .
 RUN RUSTFLAGS='-C target-feature=+crt-static' cargo build --release --target $(rustc -vV | grep host | awk '{print $2}')
-RUN cp /app/target/$(rustc -vV | grep host | awk '{print $2}')/release/perf-tokio-quiche /usr/local/bin/perf-tokio-quiche
+RUN cp /app/target/$(rustc -vV | grep host | awk '{print $2}')/release/perf-tokio-tquic /usr/local/bin/perf-tokio-tquic
 
 FROM debian:trixie-slim
-COPY --from=builder /usr/local/bin/perf-tokio-quiche /usr/local/bin/perf-tokio-quiche
+COPY --from=builder /usr/local/bin/perf-tokio-tquic /usr/local/bin/perf-tokio-tquic
 ENV RUST_BACKTRACE=1
-ENTRYPOINT ["/usr/local/bin/perf-tokio-quiche"]
+ENTRYPOINT ["/usr/local/bin/perf-tokio-tquic"]

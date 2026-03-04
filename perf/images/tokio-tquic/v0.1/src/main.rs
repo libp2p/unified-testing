@@ -1,16 +1,14 @@
 use std::env;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
-use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
-use quinn::{ClientConfig, Connection, Endpoint, RecvStream, SendStream, ServerConfig};
-use rustls::pki_types::{CertificateDer, PrivatePkcs8KeyDer};
+use tokio_tquic::{ClientConfig, Connection, Endpoint, RecvStream, SendStream, ServerConfig, VarInt};
 
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
 
-struct Config {
+struct AppConfig {
     is_dialer: bool,
     redis_addr: String,
     test_key: String,
@@ -21,7 +19,7 @@ struct Config {
     latency_iters: usize,
 }
 
-impl Config {
+impl AppConfig {
     fn from_env() -> Self {
         Self {
             is_dialer: env::var("IS_DIALER").unwrap_or_default() == "true",
@@ -80,18 +78,11 @@ fn percentile(sorted: &[f64], p: f64) -> f64 {
 fn calculate_stats(values: &mut [f64]) -> Stats {
     if values.is_empty() {
         return Stats {
-            min: 0.0,
-            q1: 0.0,
-            median: 0.0,
-            q3: 0.0,
-            max: 0.0,
-            outliers: vec![],
-            samples: vec![],
+            min: 0.0, q1: 0.0, median: 0.0, q3: 0.0, max: 0.0,
+            outliers: vec![], samples: vec![],
         };
     }
-
     values.sort_by(|a, b| a.partial_cmp(b).unwrap());
-
     let q1 = percentile(values, 25.0);
     let median = percentile(values, 50.0);
     let q3 = percentile(values, 75.0);
@@ -108,39 +99,21 @@ fn calculate_stats(values: &mut [f64]) -> Stats {
             non_outliers.push(v);
         }
     }
-
     let (min, max) = if non_outliers.is_empty() {
         (values[0], values[values.len() - 1])
     } else {
         (non_outliers[0], non_outliers[non_outliers.len() - 1])
     };
-
-    Stats {
-        min,
-        q1,
-        median,
-        q3,
-        max,
-        outliers,
-        samples: values.to_vec(),
-    }
+    Stats { min, q1, median, q3, max, outliers, samples: values.to_vec() }
 }
 
 fn format_list(values: &[f64], decimals: usize) -> String {
-    if values.is_empty() {
-        return "[]".into();
-    }
+    if values.is_empty() { return "[]".into(); }
     let items: Vec<String> = values.iter().map(|v| format!("{v:.decimals$}")).collect();
     format!("[{}]", items.join(", "))
 }
 
-fn print_results(
-    label: &str,
-    iterations: usize,
-    stats: &Stats,
-    decimals: usize,
-    unit: &str,
-) {
+fn print_results(label: &str, iterations: usize, stats: &Stats, decimals: usize, unit: &str) {
     println!("# {label} measurement");
     println!("{}:", label.to_lowercase());
     println!("  iterations: {iterations}");
@@ -159,7 +132,6 @@ fn print_results(
 // ---------------------------------------------------------------------------
 
 fn get_container_ip() -> IpAddr {
-    // Bind a UDP socket to an external address to find our default route IP
     if let Ok(sock) = UdpSocket::bind("0.0.0.0:0") {
         if sock.connect("8.8.8.8:80").is_ok() {
             if let Ok(addr) = sock.local_addr() {
@@ -175,30 +147,17 @@ fn get_container_ip() -> IpAddr {
 async fn redis_set(addr: &str, key: &str, value: &str) -> Result<(), Box<dyn std::error::Error>> {
     let client = redis::Client::open(format!("redis://{addr}"))?;
     let mut conn = client.get_multiplexed_tokio_connection().await?;
-    redis::cmd("SET")
-        .arg(key)
-        .arg(value)
-        .query_async::<()>(&mut conn)
-        .await?;
+    redis::cmd("SET").arg(key).arg(value).query_async::<()>(&mut conn).await?;
     Ok(())
 }
 
-async fn redis_get_poll(
-    addr: &str,
-    key: &str,
-    timeout_secs: u64,
-) -> Result<String, Box<dyn std::error::Error>> {
+async fn redis_get_poll(addr: &str, key: &str, timeout_secs: u64) -> Result<String, Box<dyn std::error::Error>> {
     let client = redis::Client::open(format!("redis://{addr}"))?;
     let mut conn = client.get_multiplexed_tokio_connection().await?;
     for _ in 0..timeout_secs {
-        let result: Option<String> = redis::cmd("GET")
-            .arg(key)
-            .query_async(&mut conn)
-            .await?;
+        let result: Option<String> = redis::cmd("GET").arg(key).query_async(&mut conn).await?;
         if let Some(val) = result {
-            if !val.is_empty() {
-                return Ok(val);
-            }
+            if !val.is_empty() { return Ok(val); }
         }
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
@@ -206,90 +165,36 @@ async fn redis_get_poll(
 }
 
 fn parse_multiaddr(multiaddr: &str) -> Result<SocketAddr, Box<dyn std::error::Error>> {
-    // Format: /ip4/{IP}/udp/{PORT}/quic-v1
     let parts: Vec<&str> = multiaddr.split('/').collect();
-    if parts.len() < 5 {
-        return Err(format!("invalid multiaddr: {multiaddr}").into());
-    }
+    if parts.len() < 5 { return Err(format!("invalid multiaddr: {multiaddr}").into()); }
     let ip: Ipv4Addr = parts[2].parse()?;
     let port: u16 = parts[4].parse()?;
     Ok(SocketAddr::new(IpAddr::V4(ip), port))
 }
 
 // ---------------------------------------------------------------------------
-// TLS helpers
+// TLS cert generation (tokio-tquic requires file paths)
 // ---------------------------------------------------------------------------
 
-fn generate_self_signed_cert() -> (Vec<CertificateDer<'static>>, PrivatePkcs8KeyDer<'static>) {
+struct TlsCertFiles {
+    _dir: tempfile::TempDir,
+    cert_path: String,
+    key_path: String,
+}
+
+fn generate_tls_cert_files() -> TlsCertFiles {
+    let dir = tempfile::tempdir().expect("failed to create temp dir");
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".into()]).unwrap();
-    let cert_der = CertificateDer::from(cert.cert);
-    let key_der = PrivatePkcs8KeyDer::from(cert.key_pair.serialize_der());
-    (vec![cert_der], key_der)
-}
 
-fn make_server_config() -> ServerConfig {
-    let (certs, key) = generate_self_signed_cert();
+    let cert_path = dir.path().join("cert.pem");
+    let key_path = dir.path().join("key.pem");
+    std::fs::write(&cert_path, cert.cert.pem()).unwrap();
+    std::fs::write(&key_path, cert.key_pair.serialize_pem()).unwrap();
 
-    let mut server_crypto = rustls::ServerConfig::builder()
-        .with_no_client_auth()
-        .with_single_cert(certs, key.into())
-        .unwrap();
-    server_crypto.alpn_protocols = vec![b"perf".to_vec()];
-
-    ServerConfig::with_crypto(Arc::new(
-        quinn::crypto::rustls::QuicServerConfig::try_from(server_crypto).unwrap(),
-    ))
-}
-
-fn make_client_config() -> ClientConfig {
-    let mut client_crypto = rustls::ClientConfig::builder()
-        .dangerous()
-        .with_custom_certificate_verifier(Arc::new(InsecureVerifier))
-        .with_no_client_auth();
-    client_crypto.alpn_protocols = vec![b"perf".to_vec()];
-
-    ClientConfig::new(Arc::new(
-        quinn::crypto::rustls::QuicClientConfig::try_from(client_crypto).unwrap(),
-    ))
-}
-
-#[derive(Debug)]
-struct InsecureVerifier;
-
-impl rustls::client::danger::ServerCertVerifier for InsecureVerifier {
-    fn verify_server_cert(
-        &self,
-        _end_entity: &CertificateDer<'_>,
-        _intermediates: &[CertificateDer<'_>],
-        _server_name: &rustls::pki_types::ServerName<'_>,
-        _ocsp_response: &[u8],
-        _now: rustls::pki_types::UnixTime,
-    ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
-        Ok(rustls::client::danger::ServerCertVerified::assertion())
-    }
-
-    fn verify_tls12_signature(
-        &self,
-        _message: &[u8],
-        _cert: &CertificateDer<'_>,
-        _dss: &rustls::DigitallySignedStruct,
-    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
-        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
-    }
-
-    fn verify_tls13_signature(
-        &self,
-        _message: &[u8],
-        _cert: &CertificateDer<'_>,
-        _dss: &rustls::DigitallySignedStruct,
-    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
-        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
-    }
-
-    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
-        rustls::crypto::ring::default_provider()
-            .signature_verification_algorithms
-            .supported_schemes()
+    TlsCertFiles {
+        _dir: dir,
+        cert_path: cert_path.to_str().unwrap().to_string(),
+        key_path: key_path.to_str().unwrap().to_string(),
     }
 }
 
@@ -319,7 +224,6 @@ async fn handle_stream(mut send: SendStream, mut recv: RecvStream) {
     // Read 8-byte header
     let mut header = [0u8; 8];
     if recv.read_exact(&mut header).await.is_err() {
-        // Can't read header — just discard
         let _ = tokio::io::copy(&mut recv, &mut tokio::io::sink()).await;
         return;
     }
@@ -347,8 +251,15 @@ async fn handle_connection(conn: Connection) {
     }
 }
 
-async fn run_listener(cfg: &Config) -> Result<(), Box<dyn std::error::Error>> {
-    let server_config = make_server_config();
+async fn run_listener(cfg: &AppConfig) -> Result<(), Box<dyn std::error::Error>> {
+    let tls_files = generate_tls_cert_files();
+
+    let server_config = ServerConfig::new(
+        tls_files.cert_path.clone(),
+        tls_files.key_path.clone(),
+        vec![b"perf".to_vec()],
+    );
+
     let endpoint = Endpoint::server(server_config, "0.0.0.0:4001".parse()?)?;
 
     let container_ip = get_container_ip();
@@ -362,18 +273,23 @@ async fn run_listener(cfg: &Config) -> Result<(), Box<dyn std::error::Error>> {
     eprintln!("Published to Redis (key: {key})");
     eprintln!("QUIC listener ready");
 
-    loop {
-        if let Some(incoming) = endpoint.accept().await {
-            let conn = match incoming.await {
-                Ok(c) => c,
-                Err(e) => {
-                    eprintln!("Incoming connection failed: {e}");
-                    continue;
-                }
-            };
-            tokio::spawn(handle_connection(conn));
-        }
+    while let Some(incoming) = endpoint.accept().await {
+        let conn = match incoming.await {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("Incoming connection failed: {e}");
+                continue;
+            }
+        };
+        tokio::spawn(handle_connection(conn));
     }
+
+    eprintln!("WARNING: listener accept loop exited unexpectedly");
+    // Block forever to avoid aborting the dialer via --abort-on-container-exit
+    std::future::pending::<()>().await;
+
+    #[allow(unreachable_code)]
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -411,7 +327,7 @@ async fn run_upload_test(
             Ok(s) => s,
             Err(e) => {
                 eprintln!("Upload iteration {} stream failed: {e}", i + 1);
-                conn.close(0u32.into(), b"");
+                conn.close(VarInt::from(0u32), b"");
                 continue;
             }
         };
@@ -420,7 +336,7 @@ async fn run_upload_test(
         let header = 0u64.to_be_bytes();
         if let Err(e) = send.write_all(&header).await {
             eprintln!("Upload iteration {} header write failed: {e}", i + 1);
-            conn.close(0u32.into(), b"");
+            conn.close(VarInt::from(0u32), b"");
             continue;
         }
 
@@ -433,7 +349,8 @@ async fn run_upload_test(
         let elapsed = start.elapsed().as_secs_f64();
         let gbps = (bytes as f64 * 8.0) / elapsed / 1e9;
 
-        conn.close(0u32.into(), b"");
+        conn.close(VarInt::from(0u32), b"");
+        tokio::task::yield_now().await;
 
         values.push(gbps);
         eprintln!("  Iteration {}/{iterations}: {gbps:.2} Gbps", i + 1);
@@ -465,7 +382,7 @@ async fn run_download_test(
             Ok(s) => s,
             Err(e) => {
                 eprintln!("Download iteration {} stream failed: {e}", i + 1);
-                conn.close(0u32.into(), b"");
+                conn.close(VarInt::from(0u32), b"");
                 continue;
             }
         };
@@ -474,27 +391,29 @@ async fn run_download_test(
         let header = bytes.to_be_bytes();
         if let Err(e) = send.write_all(&header).await {
             eprintln!("Download iteration {} header write failed: {e}", i + 1);
-            conn.close(0u32.into(), b"");
+            conn.close(VarInt::from(0u32), b"");
             continue;
         }
         let _ = send.finish();
 
-        // Read exactly the expected number of bytes (counted read + FIN check,
-        // matching the pattern used by quiche/tquic/tokio-quiche baselines)
+        // Read exactly the expected number of bytes. We use recv.read() with a
+        // byte counter instead of tokio::io::copy because tokio-tquic's RecvStream
+        // AsyncRead impl does not reliably signal EOF when the sender calls finish().
         let mut buf = [0u8; 65536];
         let mut remaining = bytes;
         while remaining > 0 {
             let to_read = remaining.min(buf.len() as u64) as usize;
             match recv.read(&mut buf[..to_read]).await {
                 Ok(Some(n)) if n > 0 => remaining -= n as u64,
-                _ => break, // Ok(None) = FIN, Err = error
+                _ => break,
             }
         }
 
         let elapsed = start.elapsed().as_secs_f64();
         let gbps = (bytes as f64 * 8.0) / elapsed / 1e9;
 
-        conn.close(0u32.into(), b"");
+        conn.close(VarInt::from(0u32), b"");
+        tokio::task::yield_now().await;
 
         values.push(gbps);
         eprintln!("  Iteration {}/{iterations}: {gbps:.2} Gbps", i + 1);
@@ -525,7 +444,7 @@ async fn run_latency_test(
             Ok(s) => s,
             Err(e) => {
                 eprintln!("Latency iteration {} stream failed: {e}", i + 1);
-                conn.close(0u32.into(), b"");
+                conn.close(VarInt::from(0u32), b"");
                 continue;
             }
         };
@@ -541,7 +460,8 @@ async fn run_latency_test(
         let elapsed = start.elapsed().as_secs_f64();
         let latency_ms = elapsed * 1000.0;
 
-        conn.close(0u32.into(), b"");
+        conn.close(VarInt::from(0u32), b"");
+        tokio::task::yield_now().await;
 
         values.push(latency_ms);
     }
@@ -549,7 +469,15 @@ async fn run_latency_test(
     calculate_stats(&mut values)
 }
 
-async fn run_dialer(cfg: &Config) -> Result<(), Box<dyn std::error::Error>> {
+fn make_client_endpoint() -> Result<Endpoint, Box<dyn std::error::Error>> {
+    let mut client_config = ClientConfig::new(vec![b"perf".to_vec()]);
+    client_config.verify(false);
+    let endpoint = Endpoint::client("0.0.0.0:0".parse()?)?;
+    endpoint.set_default_client_config(client_config);
+    Ok(endpoint)
+}
+
+async fn run_dialer(cfg: &AppConfig) -> Result<(), Box<dyn std::error::Error>> {
     eprintln!("Running as dialer/client...");
 
     let key = format!("{}_listener_multiaddr", cfg.test_key);
@@ -561,33 +489,32 @@ async fn run_dialer(cfg: &Config) -> Result<(), Box<dyn std::error::Error>> {
     let server_addr = parse_multiaddr(&multiaddr)?;
     eprintln!("Connecting to QUIC server: {server_addr}");
 
-    let client_config = make_client_config();
-    let mut endpoint = Endpoint::client("0.0.0.0:0".parse()?)?;
-    endpoint.set_default_client_config(client_config);
+    let endpoint = make_client_endpoint()?;
 
     // Upload test
     eprintln!("Running upload test ({} iterations)...", cfg.upload_iters);
     let upload_stats =
         run_upload_test(server_addr, &endpoint, cfg.upload_bytes, cfg.upload_iters).await;
 
+    // Wait for bridge thread to drain upload connections before starting download
+    tokio::select! {
+        _ = endpoint.wait_idle() => {}
+        _ = tokio::time::sleep(Duration::from_secs(10)) => {}
+    }
+
     // Download test
-    eprintln!(
-        "Running download test ({} iterations)...",
-        cfg.download_iters
-    );
-    let download_stats = run_download_test(
-        server_addr,
-        &endpoint,
-        cfg.download_bytes,
-        cfg.download_iters,
-    )
-    .await;
+    eprintln!("Running download test ({} iterations)...", cfg.download_iters);
+    let download_stats =
+        run_download_test(server_addr, &endpoint, cfg.download_bytes, cfg.download_iters).await;
+
+    // Wait for bridge thread to drain download connections before starting latency
+    tokio::select! {
+        _ = endpoint.wait_idle() => {}
+        _ = tokio::time::sleep(Duration::from_secs(10)) => {}
+    }
 
     // Latency test
-    eprintln!(
-        "Running latency test ({} iterations)...",
-        cfg.latency_iters
-    );
+    eprintln!("Running latency test ({} iterations)...", cfg.latency_iters);
     let latency_stats =
         run_latency_test(server_addr, &endpoint, cfg.latency_iters).await;
 
@@ -599,7 +526,13 @@ async fn run_dialer(cfg: &Config) -> Result<(), Box<dyn std::error::Error>> {
     print_results("Latency", cfg.latency_iters, &latency_stats, 3, "ms");
 
     eprintln!("All measurements complete!");
-    endpoint.wait_idle().await;
+
+    // Clean shutdown of the bridge thread
+    tokio::select! {
+        _ = endpoint.wait_idle() => {}
+        _ = tokio::time::sleep(Duration::from_secs(10)) => {}
+    }
+
     Ok(())
 }
 
@@ -609,7 +542,7 @@ async fn run_dialer(cfg: &Config) -> Result<(), Box<dyn std::error::Error>> {
 
 #[tokio::main]
 async fn main() {
-    let cfg = Config::from_env();
+    let cfg = AppConfig::from_env();
 
     let result = if cfg.is_dialer {
         run_dialer(&cfg).await
