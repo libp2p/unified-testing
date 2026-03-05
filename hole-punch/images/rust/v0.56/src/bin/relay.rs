@@ -115,7 +115,9 @@ async fn main() -> Result<()> {
                 continue;
             }
             if listener_id == id {
+                swarm.add_external_address(address.clone());
                 let full_multiaddr = format!("{address}/p2p/{peer_id}");
+                eprintln!("Confirmed external address: {address}");
                 eprintln!("Listening on: {full_multiaddr}");
 
                 // Register the listen address as an external address so the relay
@@ -157,6 +159,11 @@ async fn main() -> Result<()> {
 
                 swarm::SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
                     eprintln!("Connection closed with {peer_id}: {cause:?}");
+                }
+
+                swarm::SwarmEvent::NewExternalAddrCandidate { address } => {
+                    eprintln!("Adding external address: {address}");
+                    swarm.add_external_address(address);
                 }
 
                 other => {

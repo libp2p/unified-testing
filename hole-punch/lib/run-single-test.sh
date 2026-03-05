@@ -523,8 +523,8 @@ else
         echo "" >> "${LOG_FILE}"
         log_error "Test timed out after ${TEST_TIMEOUT} seconds"
     else
-        EXIT_CODE=1
-        log_error "  ✗ Test failed"
+        EXIT_CODE="${TEST_EXIT}"
+        log_error "  ✗ Test failed (exit code ${TEST_EXIT})"
     fi
 fi
 
@@ -546,6 +546,21 @@ else
   # Normal: extract YAML from dialer logs
   # Match only measurement sections and their fields (not logging output)
   DIALER_YAML=$(echo "${DIALER_LOGS}" | grep -E "dialer.*\| (latency:|  (handshake_plus_one_rtt|ping_rtt|unit):)" | sed 's/^.*| //' || echo "")
+fi
+
+# Handle exit code 143 (SIGTERM): When the listener exits before the dialer,
+# docker-compose's --abort-on-container-exit sends SIGTERM to the dialer.
+# Slow-to-shutdown implementations (e.g. JVM) exit with 143 even though the
+# test completed successfully. If we have valid measurement data, treat as pass.
+# See: https://github.com/libp2p/unified-testing/issues/16
+if [ "${EXIT_CODE}" -eq 143 ] && [ -n "${DIALER_YAML}" ]; then
+  log_message "  → Dialer received SIGTERM (exit 143) but produced valid results — treating as pass"
+  EXIT_CODE=0
+fi
+
+# Normalize any remaining non-zero exit code to 1 for consistent status reporting
+if [ "${EXIT_CODE}" -ne 0 ]; then
+  EXIT_CODE=1
 fi
 
 # Save complete result to individual file
