@@ -58,3 +58,7 @@ target/
 
 # the local build cache folder
 **/.cache/
+
+# environment files containing secrets (e.g. GitHub PATs)
+**/.env
+

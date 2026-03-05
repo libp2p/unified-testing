@@ -12,6 +12,10 @@ This checklist covers comprehensive manual testing of the two-stage filtering sy
 
 ---
 
+## CLI Aliases
+
+> `--image-select` and `--image-ignore` are aliases for `--impl-select` and `--impl-ignore` respectively. Both set the same `IMPL_SELECT`/`IMPL_IGNORE` variables.
+
 ## Perf Test Suite
 
 ### Implementation Filtering
