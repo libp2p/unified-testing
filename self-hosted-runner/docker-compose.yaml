@@ -1,0 +1,20 @@
+services:
+  runner-unified-testing:
+    image: ghcr.io/<username>/libp2p-gh-runner:latest
+    restart: unless-stopped
+    container_name: ${RUNNER_NAME}-unified-testing
+    environment:
+      RUNNER_ALLOW_RUNASROOT: true
+      EPHEMERAL: true
+      DISABLE_AUTO_UPDATE: true
+      REPO_URL: https://github.com/libp2p/unified-testing
+      RUNNER_NAME: ${RUNNER_NAME}-unified-testing
+      ACCESS_TOKEN: ${ACCESS_TOKEN}
+      RUNNER_SCOPE: 'repo'
+      LABELS: 'self-hosted,linux,x64,ephemeral'
+    security_opt:
+      # needed on SELinux systems to allow docker container to manage other docker containers
+      - label:disable
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "/srv/cache:/srv/cache" # Mount the cache directory for build caching

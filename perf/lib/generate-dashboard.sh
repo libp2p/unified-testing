@@ -196,25 +196,11 @@ cat > "$OUTPUT_MD" <<EOF
 
 ---
 
-## Latest Test Results
+## Results
 
 See [Latest Test Results](LATEST_TEST_RESULTS.md) for detailed statistics.
 
----
-
-## Results
-
-### Upload Throughput
-
-![Upload Box Plot](upload_boxplot.png)
-
-### Download Throughput
-
-![Download Box Plot](download_boxplot.png)
-
-### Latency
-
-![Latency Box Plot](latency_boxplot.png)
+Box plots are rendered directly on the [libp2p status page](https://libp2p.io/status/#performance-benchmarks).
 
 ---
 
@@ -233,7 +219,7 @@ cat > "$OUTPUT_HTML" <<EOF
         body { font-family: monospace; margin: 20px; }
         .pass { color: green; }
         .fail { color: red; }
-        img { max-width: 800px; margin: 20px 0; }
+        a { color: #0366d6; }
     </style>
 </head>
 <body>
@@ -246,13 +232,8 @@ cat > "$OUTPUT_HTML" <<EOF
         <li class="pass">Passed: $passed_all</li>
         <li class="fail">Failed: $failed_all</li>
     </ul>
-    <h2>Box Plots</h2>
-    <h3>Upload Throughput</h3>
-    <img src="upload_boxplot.png" alt="Upload Throughput">
-    <h3>Download Throughput</h3>
-    <img src="download_boxplot.png" alt="Download Throughput">
-    <h3>Latency</h3>
-    <img src="latency_boxplot.png" alt="Latency">
+    <h2>Results</h2>
+    <p>Box plots are rendered directly on the <a href="https://libp2p.io/status/#performance-benchmarks">libp2p status page</a>.</p>
 </body>
 </html>
 EOF

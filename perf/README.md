@@ -41,7 +41,7 @@ Check dependencies:
 ./run.sh --check-deps
 ```
 
-Required: bash 4.0+, docker 20.10+, yq 4.0+, wget, unzip, gnuplot (optional, for box plots)
+Required: bash 4.0+, docker 20.10+, yq 4.0+, wget, unzip
 
 ### Basic Usage
 
@@ -317,7 +317,6 @@ The performance test framework executes tests through the following workflow:
 5. **Results Collection**
    - Combine all individual test results into `results.yaml`
    - Generate results dashboard (`results.md` and `results.html`)
-   - Generate box plots (if gnuplot available) showing throughput/latency distributions
    - Create test pass snapshot (if `--snapshot` flag set)
 
 ### Test Coordination
@@ -387,8 +386,6 @@ After a test run, results are in `${TEST_PASS_DIR}`:
 - **LATEST_TEST_RESULTS.md**: Detailed results with statistics
 - **logs/**: Individual test logs
 - **results/**: Individual test result YAML files
-- **boxplots/**: Box plot visualizations (PNG, if gnuplot available)
-
 ### Result Format
 
 The `results.yaml` file contains metadata, summary statistics, and individual test results:
@@ -451,10 +448,7 @@ testResults:
 
 ### Box Plots
 
-If gnuplot is installed, box plots are generated showing distribution of results:
-- Upload throughput across all tests
-- Download throughput across all tests
-- Latency across all tests
+Box plots are now rendered directly on the [libp2p status page](https://libp2p.io/status/#performance-benchmarks) from the YAML data uploaded to Filebase S3.
 
 ## Architecture and Scripts
 
@@ -469,7 +463,6 @@ perf/
     ├── generate-tests.sh       # Test matrix generation with filtering
     ├── run-single-test.sh      # Individual test execution via docker-compose
     ├── generate-dashboard.sh   # Results dashboard (MD/HTML) generation
-    ├── generate-boxplot.sh     # Box plot visualization generation
     └── setup-remote-server.sh  # Remote server setup (multi-machine testing)
 ```
 
@@ -496,11 +489,6 @@ perf/
 - Creates markdown and HTML dashboards from results.yaml
 - Generates summary statistics and detailed test listings
 - Supports injection into README.md for CI/CD
-
-**`perf/lib/generate-boxplot.sh`** - Box plot generator
-- Creates box plot visualizations using gnuplot
-- Generates separate plots for upload, download, and latency metrics
-- Requires gnuplot to be installed
 
 ### Common Libraries (../lib/)
 
