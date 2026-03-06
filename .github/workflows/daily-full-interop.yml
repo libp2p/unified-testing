@@ -96,7 +96,7 @@ on:
       perf-baseline-select:
         description: '[Perf] Select specific baseline tests (pipe-separated substrings)'
         required: false
-        default: ''
+        default: '~default_baselines'
         type: string
       perf-baseline-ignore:
         description: '[Perf] Ignore specific baseline tests (pipe-separated substrings)'
@@ -306,7 +306,7 @@ jobs:
 
             echo "test-select=" >> $GITHUB_OUTPUT
             echo "test-ignore=~failing" >> $GITHUB_OUTPUT
-            echo "baseline-select=" >> $GITHUB_OUTPUT
+            echo "baseline-select=~default_baselines" >> $GITHUB_OUTPUT
             echo "baseline-ignore=~failing" >> $GITHUB_OUTPUT
             echo "iterations=10" >> $GITHUB_OUTPUT
             echo "force-image-rebuild=false" >> $GITHUB_OUTPUT
