@@ -43,7 +43,6 @@ version_compare() {
 # Version types:
 #   "standard"  - tool --version, extracts X.Y.Z
 #   "bash"      - uses $BASH_VERSION variable
-#   "gnuplot"   - gnuplot --version, extracts X.Y
 #   "compose"   - docker compose version
 get_version() {
   local tool="$1"
@@ -55,9 +54,6 @@ get_version() {
       ;;
     "bash")
       echo "${BASH_VERSION%.*}"
-      ;;
-    "gnuplot")
-      gnuplot --version 2>&1 | grep -oE '[0-9]+\.[0-9]+' | head -1
       ;;
     "compose")
       docker compose version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1
@@ -99,7 +95,7 @@ print_install_instructions() {
   case "${host_os}" in
     macos|darwin)
       print_message "# Install required packages using Homebrew" >&2
-      print_message "brew install coreutils flock gnu-sed gnu-tar gzip wget zip unzip bc yq gnuplot pandoc" >&2
+      print_message "brew install coreutils flock gnu-sed gnu-tar gzip wget zip unzip bc yq pandoc" >&2
       print_message "" >&2
       print_message "# Install Docker Desktop for Mac from:" >&2
       print_message "# https://www.docker.com/products/docker-desktop" >&2
@@ -117,7 +113,7 @@ print_install_instructions() {
       print_message "sudo chmod +x /usr/local/bin/yq" >&2
       print_message "" >&2
       print_message "# Optional: Install for additional features" >&2
-      print_message "sudo apt-get install -y gnuplot pandoc" >&2
+      print_message "sudo apt-get install -y pandoc" >&2
       ;;
     *)
       # Default: Linux
@@ -130,7 +126,7 @@ print_install_instructions() {
       print_message "sudo chmod +x /usr/local/bin/yq" >&2
       print_message "" >&2
       print_message "# Optional: Install for additional features" >&2
-      print_message "sudo apt-get install -y gnuplot pandoc" >&2
+      print_message "sudo apt-get install -y pandoc" >&2
       ;;
   esac
   println
@@ -211,7 +207,6 @@ declare -a PRESENCE_ONLY_TOOLS=(
 
 # Optional tools: "tool:min_version:version_type" (0 means presence-only)
 declare -a OPTIONAL_TOOLS=(
-  "gnuplot:5.0:gnuplot"
   "pandoc:0:standard"
 )
 
