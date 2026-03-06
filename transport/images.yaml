@@ -78,7 +78,9 @@ implementations:
       dockerfile: interop-tests/Dockerfile.native
       patchPath: images/rust/v0.56
       patchFile: transport-fix.patch
-    transports: [ws, tcp, quic-v1, webrtc-direct]
+    # webrtc-direct removed: broken in this version (SRTP key length mismatch, see #20).
+    # Fixed upstream in webrtc-rs/webrtc#677. Re-enable when rust-libp2p cuts a new release with the fix.
+    transports: [ws, tcp, quic-v1]
     secureChannels: [tls, noise]
     muxers: [mplex, yamux]
 
@@ -397,9 +399,11 @@ implementations:
       repo: libp2p/rust-libp2p
       commit: 70082df7e6181722630eabc5de5373733aac9a21
       dockerfile: interop-tests/Dockerfile.chromium
-    transports: [webtransport, webrtc-direct, ws]
+    # webrtc-direct removed: broken in this version (SRTP key length mismatch, see #20).
+    # Fixed upstream in webrtc-rs/webrtc#677. Re-enable when rust-libp2p cuts a new release with the fix.
+    transports: [webtransport, ws]
     secureChannels: [noise]
     muxers: [mplex, yamux]
-    dialOnly: [webtransport, webrtc-direct, ws]
+    dialOnly: [webtransport, ws]
     legacy: true
 
