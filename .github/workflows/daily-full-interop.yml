@@ -16,21 +16,11 @@ on:
         required: false
         default: '~failing'
         type: string
-      transport-force-matrix-rebuild:
-        description: '[Transport] Force test matrix regeneration'
+      transport-flags:
+        description: '[Transport] Flags: matrix=force matrix rebuild, images=force image rebuild, debug=enable debug (comma-separated)'
         required: false
-        default: false
-        type: boolean
-      transport-force-image-rebuild:
-        description: '[Transport] Force Docker image rebuilds'
-        required: false
-        default: false
-        type: boolean
-      transport-debug:
-        description: '[Transport] Enable debug mode'
-        required: false
-        default: false
-        type: boolean
+        default: ''
+        type: string
       # Hole-punch parameters
       hole-punch-test-select:
         description: '[Hole-punch] Select specific tests (pipe-separated substrings)'
@@ -67,21 +57,11 @@ on:
         required: false
         default: 'ws|webrtc-direct'
         type: string
-      hole-punch-force-matrix-rebuild:
-        description: '[Hole-punch] Force test matrix regeneration'
+      hole-punch-flags:
+        description: '[Hole-punch] Flags: matrix=force matrix rebuild, images=force image rebuild, debug=enable debug (comma-separated)'
         required: false
-        default: false
-        type: boolean
-      hole-punch-force-image-rebuild:
-        description: '[Hole-punch] Force Docker image rebuilds'
-        required: false
-        default: false
-        type: boolean
-      hole-punch-debug:
-        description: '[Hole-punch] Enable debug mode'
-        required: false
-        default: false
-        type: boolean
+        default: ''
+        type: string
       # Perf parameters
       perf-test-select:
         description: '[Perf] Select specific implementations to test (pipe-separated substrings)'
@@ -98,31 +78,16 @@ on:
         required: false
         default: ''
         type: string
-      perf-baseline-ignore:
-        description: '[Perf] Ignore specific baseline tests (pipe-separated substrings)'
-        required: false
-        default: '~failing'
-        type: string
       perf-iterations:
         description: '[Perf] Number of iterations per test'
         required: false
         default: 10
         type: number
-      perf-force-matrix-rebuild:
-        description: '[Perf] Force test matrix regeneration'
+      perf-flags:
+        description: '[Perf] Flags: matrix=force matrix rebuild, images=force image rebuild, debug=enable debug (comma-separated)'
         required: false
-        default: false
-        type: boolean
-      perf-force-image-rebuild:
-        description: '[Perf] Force Docker image rebuilds'
-        required: false
-        default: false
-        type: boolean
-      perf-debug:
-        description: '[Perf] Enable debug mode'
-        required: false
-        default: false
-        type: boolean
+        default: ''
+        type: string
       # Misc parameters (single input to stay within GitHub's 25-input limit)
       misc-protocol-select:
         description: '[Misc] Select specific protocols (pipe-separated, e.g. "ping|echo")'
@@ -163,11 +128,12 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             # Manual trigger - use workflow inputs
+            FLAGS="${{ github.event.inputs.transport-flags }}"
             echo "test-select=${{ github.event.inputs.transport-test-select }}" >> $GITHUB_OUTPUT
             echo "test-ignore=${{ github.event.inputs.transport-test-ignore }}" >> $GITHUB_OUTPUT
-            echo "force-matrix-rebuild=${{ github.event.inputs.transport-force-matrix-rebuild }}" >> $GITHUB_OUTPUT
-            echo "force-image-rebuild=${{ github.event.inputs.transport-force-image-rebuild }}" >> $GITHUB_OUTPUT
-            echo "debug=${{ github.event.inputs.transport-debug }}" >> $GITHUB_OUTPUT
+            echo "force-matrix-rebuild=$([[ "$FLAGS" == *"matrix"* ]] && echo "true" || echo "false")" >> $GITHUB_OUTPUT
+            echo "force-image-rebuild=$([[ "$FLAGS" == *"images"* ]] && echo "true" || echo "false")" >> $GITHUB_OUTPUT
+            echo "debug=$([[ "$FLAGS" == *"debug"* ]] && echo "true" || echo "false")" >> $GITHUB_OUTPUT
             echo "should-run-tests=true" >> $GITHUB_OUTPUT
             echo "→ Manual trigger: using workflow inputs for transport"
           else
@@ -228,6 +194,7 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             # Manual trigger - use workflow inputs
+            FLAGS="${{ github.event.inputs.hole-punch-flags }}"
             echo "test-select=${{ github.event.inputs.hole-punch-test-select }}" >> $GITHUB_OUTPUT
             echo "test-ignore=${{ github.event.inputs.hole-punch-test-ignore }}" >> $GITHUB_OUTPUT
             echo "relay-select=${{ github.event.inputs.hole-punch-relay-select }}" >> $GITHUB_OUTPUT
@@ -294,11 +261,11 @@ jobs:
         shell: bash
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            # Manual trigger - use workflow inputs
+            # Manual trigger - use workflow inputs (baseline-ignore always defaults to ~failing)
             echo "test-select=${{ github.event.inputs.perf-test-select }}" >> $GITHUB_OUTPUT
             echo "test-ignore=${{ github.event.inputs.perf-test-ignore }}" >> $GITHUB_OUTPUT
             echo "baseline-select=${{ github.event.inputs.perf-baseline-select }}" >> $GITHUB_OUTPUT
-            echo "baseline-ignore=${{ github.event.inputs.perf-baseline-ignore }}" >> $GITHUB_OUTPUT
+            echo "baseline-ignore=~failing" >> $GITHUB_OUTPUT
             echo "iterations=${{ github.event.inputs.perf-iterations }}" >> $GITHUB_OUTPUT
             echo "force-matrix-rebuild=${{ github.event.inputs.perf-force-matrix-rebuild }}" >> $GITHUB_OUTPUT
             echo "force-image-rebuild=${{ github.event.inputs.perf-force-image-rebuild }}" >> $GITHUB_OUTPUT
