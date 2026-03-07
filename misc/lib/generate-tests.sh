@@ -421,10 +421,14 @@ for pid in "${pids[@]}"; do wait "${pid}"; done
 total_selected=0
 total_ignored=0
 for (( w=0; w<WORKER_COUNT; w++ )); do
-  [ -f "${TEST_PASS_DIR}/worker-${w}-selected.yaml" ] && \
-    total_selected=$(( total_selected + $(grep -c "^  - id:" "${TEST_PASS_DIR}/worker-${w}-selected.yaml" 2>/dev/null || echo 0) ))
-  [ -f "${TEST_PASS_DIR}/worker-${w}-ignored.yaml" ] && \
-    total_ignored=$(( total_ignored + $(grep -c "^  - id:" "${TEST_PASS_DIR}/worker-${w}-ignored.yaml" 2>/dev/null || echo 0) ))
+  if [ -f "${TEST_PASS_DIR}/worker-${w}-selected.yaml" ]; then
+    count=$(grep -c "^  - id:" "${TEST_PASS_DIR}/worker-${w}-selected.yaml" 2>/dev/null || echo "0")
+    total_selected=$(( total_selected + count ))
+  fi
+  if [ -f "${TEST_PASS_DIR}/worker-${w}-ignored.yaml" ]; then
+    count=$(grep -c "^  - id:" "${TEST_PASS_DIR}/worker-${w}-ignored.yaml" 2>/dev/null || echo "0")
+    total_ignored=$(( total_ignored + count ))
+  fi
 done
 
 rm -rf "${WORKER_DATA_DIR}"
