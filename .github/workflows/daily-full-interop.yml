@@ -202,9 +202,9 @@ jobs:
             echo "router-select=${{ github.event.inputs.hole-punch-router-select }}" >> $GITHUB_OUTPUT
             echo "router-ignore=${{ github.event.inputs.hole-punch-router-ignore }}" >> $GITHUB_OUTPUT
             echo "transport-ignore=${{ github.event.inputs.hole-punch-transport-ignore }}" >> $GITHUB_OUTPUT
-            echo "force-matrix-rebuild=${{ github.event.inputs.hole-punch-force-matrix-rebuild }}" >> $GITHUB_OUTPUT
-            echo "force-image-rebuild=${{ github.event.inputs.hole-punch-force-image-rebuild }}" >> $GITHUB_OUTPUT
-            echo "debug=${{ github.event.inputs.hole-punch-debug }}" >> $GITHUB_OUTPUT
+            echo "force-matrix-rebuild=$([[ "$FLAGS" == *"matrix"* ]] && echo "true" || echo "false")" >> $GITHUB_OUTPUT
+            echo "force-image-rebuild=$([[ "$FLAGS" == *"images"* ]] && echo "true" || echo "false")" >> $GITHUB_OUTPUT
+            echo "debug=$([[ "$FLAGS" == *"debug"* ]] && echo "true" || echo "false")" >> $GITHUB_OUTPUT
             echo "should-run-tests=true" >> $GITHUB_OUTPUT
             echo "→ Manual trigger: using workflow inputs for hole-punch"
           else
@@ -262,14 +262,15 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             # Manual trigger - use workflow inputs (baseline-ignore always defaults to ~failing)
+            FLAGS="${{ github.event.inputs.perf-flags }}"
             echo "test-select=${{ github.event.inputs.perf-test-select }}" >> $GITHUB_OUTPUT
             echo "test-ignore=${{ github.event.inputs.perf-test-ignore }}" >> $GITHUB_OUTPUT
             echo "baseline-select=${{ github.event.inputs.perf-baseline-select }}" >> $GITHUB_OUTPUT
             echo "baseline-ignore=~failing" >> $GITHUB_OUTPUT
             echo "iterations=${{ github.event.inputs.perf-iterations }}" >> $GITHUB_OUTPUT
-            echo "force-matrix-rebuild=${{ github.event.inputs.perf-force-matrix-rebuild }}" >> $GITHUB_OUTPUT
-            echo "force-image-rebuild=${{ github.event.inputs.perf-force-image-rebuild }}" >> $GITHUB_OUTPUT
-            echo "debug=${{ github.event.inputs.perf-debug }}" >> $GITHUB_OUTPUT
+            echo "force-matrix-rebuild=$([[ "$FLAGS" == *"matrix"* ]] && echo "true" || echo "false")" >> $GITHUB_OUTPUT
+            echo "force-image-rebuild=$([[ "$FLAGS" == *"images"* ]] && echo "true" || echo "false")" >> $GITHUB_OUTPUT
+            echo "debug=$([[ "$FLAGS" == *"debug"* ]] && echo "true" || echo "false")" >> $GITHUB_OUTPUT
             echo "should-run-tests=true" >> $GITHUB_OUTPUT
             echo "→ Manual trigger: using workflow inputs for perf"
           else
