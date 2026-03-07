@@ -104,7 +104,7 @@ implementations:
     source:
       type: github
       repo: libp2p/py-libp2p
-      commit: 34c4bd95a0bb170bd37d191c665e10d0f38aad27
+      commit: ca470efdaf4df982d4e3844d86a515eb18efca7a
       dockerfile: interop/perf/Dockerfile
     transports: [tcp, ws]
     secureChannels: [noise, tls]
@@ -115,7 +115,7 @@ implementations:
   #    type: local
   #    path: images/python/0.x/py-libp2p
   #    dockerfile: interop/perf/Dockerfile
-  #  # transports: [quic-v1, tcp, ws]
+    # transports: [quic-v1, tcp, ws]
   #  transports: [tcp, ws]
   #  secureChannels: [noise, tls]
   #  muxers: [yamux, mplex]
