@@ -1,0 +1,84 @@
+# Misc Protocol Interop - Implementation Definitions
+# This file defines all libp2p implementations to test for miscellaneous
+# protocol interoperability: Ping, Echo, and Identify.
+
+# Test Aliases - Define reusable patterns for test selection
+# Usage: --impl-select "~js" or --protocol-ignore "!~ping"
+test-aliases:
+  - alias: "all"
+    value: "~js|~go|~rust|~python"
+  - alias: "js"
+    value: "js-v3.x"
+  - alias: "go"
+    value: "go-v0.45"
+  - alias: "rust"
+    value: "rust-v0.56"
+  - alias: "python"
+    value: "python-v0.x"
+
+# Protocol Aliases - Define reusable patterns for protocol selection
+# Usage: --protocol-select "~ping" or --protocol-ignore "!~echo"
+protocol-aliases:
+  - alias: "ping"
+    value: "ping"
+  - alias: "echo"
+    value: "echo"
+  - alias: "identify"
+    value: "identify"
+  - alias: "all"
+    value: "ping|echo|identify"
+
+implementations:
+  # JavaScript (Node.js) - js-libp2p v3.x
+  # Supports ping, echo, and identify protocols
+  - id: js-v3.x
+    source:
+      type: local
+      path: images/js/v3.x
+      dockerfile: Dockerfile
+    transports: [tcp, ws]
+    secureChannels: [noise]
+    muxers: [yamux, mplex]
+    protocols: [ping, echo, identify]
+
+  # Go - go-libp2p v0.45
+  # Supports ping and identify protocols natively via the interop test binary.
+  # Echo support requires a separate misc Dockerfile (coming in future PRs).
+  - id: go-v0.45
+    source:
+      type: github
+      repo: libp2p/go-libp2p
+      commit: d0ecbf99a977f95428c72ec436b96ba17bbcfea0  # v0.45.0
+      dockerfile: test-plans/PingDockerfile
+    transports: [tcp, ws]
+    secureChannels: [tls, noise]
+    muxers: [yamux]
+    protocols: [ping]
+
+  # Rust - rust-libp2p v0.56
+  # Supports ping and identify protocols via the native interop test binary.
+  # Echo support requires a separate misc Dockerfile (coming in future PRs).
+  - id: rust-v0.56
+    source:
+      type: github
+      repo: libp2p/rust-libp2p
+      commit: 70082df7e6181722630eabc5de5373733aac9a21
+      dockerfile: interop-tests/Dockerfile.native
+    transports: [tcp, ws]
+    secureChannels: [tls, noise]
+    muxers: [yamux, mplex]
+    protocols: [ping]
+
+  # Python - py-libp2p v0.x
+  # Supports ping protocol via the interop test binary.
+  # Echo and identify support requires a separate misc Dockerfile.
+  - id: python-v0.x
+    source:
+      type: github
+      repo: libp2p/py-libp2p
+      commit: 22ea173ac0359a386275bdf6b846bc52a0082e91
+      dockerfile: interop/transport/Dockerfile
+    transports: [tcp]
+    secureChannels: [noise]
+    muxers: [mplex]
+    protocols: [ping]
