@@ -26,6 +26,10 @@ inputs:
     description: "Ignore routers (pipe-separated substrings)"
     required: false
     default: ""
+  transport-ignore:
+    description: "Ignore transports (pipe-separated patterns). Default excludes ws and webrtc-direct which are incompatible with DCUtR hole-punching."
+    required: false
+    default: "ws|webrtc-direct"
   cache-dir:
     description: "Local directory to use for build cache"
     required: false
@@ -99,6 +103,7 @@ runs:
           --relay-ignore '${{ inputs.relay-ignore }}' \
           --router-select '${{ inputs.router-select }}' \
           --router-ignore '${{ inputs.router-ignore }}' \
+          --transport-ignore '${{ inputs.transport-ignore }}' \
           --cache-dir '${{ inputs.cache-dir }}' \
           $SNAPSHOT_FLAG \
           $EXPORT_DOCKER_FLAG \

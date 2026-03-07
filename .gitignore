@@ -61,3 +61,4 @@ target/
 
 # environment files containing secrets (e.g. GitHub PATs)
 **/.env
+

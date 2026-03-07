@@ -39,6 +39,11 @@ on:
         required: false
         default: ''
         type: string
+      transport-ignore:
+        description: 'Ignore transports (pipe-separated patterns, e.g., "ws|webrtc-direct")'
+        required: false
+        default: 'ws|webrtc-direct'
+        type: string
       force-matrix-rebuild:
         description: 'Force test matrix regeneration (bypass cache)'
         required: false
@@ -79,6 +84,7 @@ jobs:
       relay-ignore: ${{ steps.resolve.outputs.relay-ignore }}
       router-select: ${{ steps.resolve.outputs.router-select }}
       router-ignore: ${{ steps.resolve.outputs.router-ignore }}
+      transport-ignore: ${{ steps.resolve.outputs.transport-ignore }}
       force-matrix-rebuild: ${{ steps.resolve.outputs.force-matrix-rebuild }}
       force-image-rebuild: ${{ steps.resolve.outputs.force-image-rebuild }}
       debug: ${{ steps.resolve.outputs.debug }}
@@ -110,6 +116,7 @@ jobs:
             echo "relay-ignore=${{ github.event.inputs.relay-ignore }}" >> $GITHUB_OUTPUT
             echo "router-select=${{ github.event.inputs.router-select }}" >> $GITHUB_OUTPUT
             echo "router-ignore=${{ github.event.inputs.router-ignore }}" >> $GITHUB_OUTPUT
+            echo "transport-ignore=${{ github.event.inputs.transport-ignore }}" >> $GITHUB_OUTPUT
             echo "force-matrix-rebuild=${{ github.event.inputs.force-matrix-rebuild }}" >> $GITHUB_OUTPUT
             echo "force-image-rebuild=${{ github.event.inputs.force-image-rebuild }}" >> $GITHUB_OUTPUT
             echo "debug=${{ github.event.inputs.debug }}" >> $GITHUB_OUTPUT
@@ -155,6 +162,7 @@ jobs:
               echo "router-ignore=~failing" >> $GITHUB_OUTPUT
             fi
 
+            echo "transport-ignore=ws|webrtc-direct" >> $GITHUB_OUTPUT
             echo "force-matrix-rebuild=${{ steps.detect.outputs.impls-yaml-changed }}" >> $GITHUB_OUTPUT
             echo "force-image-rebuild=${{ steps.detect.outputs.images-folder-changed }}" >> $GITHUB_OUTPUT
             echo "debug=false" >> $GITHUB_OUTPUT
@@ -181,6 +189,7 @@ jobs:
           relay-ignore: '${{ needs.resolve-parameters.outputs.relay-ignore }}'
           router-select: '${{ needs.resolve-parameters.outputs.router-select }}'
           router-ignore: '${{ needs.resolve-parameters.outputs.router-ignore }}'
+          transport-ignore: '${{ needs.resolve-parameters.outputs.transport-ignore }}'
           cache-dir: /srv/cache
           snapshot: ${{ needs.resolve-parameters.outputs.snapshot }}
           export-docker-images: ${{ needs.resolve-parameters.outputs.export-docker-images }}

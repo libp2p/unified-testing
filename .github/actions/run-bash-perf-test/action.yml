@@ -130,7 +130,7 @@ runs:
         fi
 
         ./run.sh \
-          --test-select '${{ inputs.test-select }}' \
+          --impl-select '${{ inputs.test-select }}' \
           --test-ignore '${{ inputs.test-ignore }}' \
           --baseline-select '${{ inputs.baseline-select }}' \
           --baseline-ignore '${{ inputs.baseline-ignore }}' \
