@@ -64,8 +64,10 @@ environmentVariables:
   TEST_IGNORE: "${TEST_IGNORE}"
 
   # Other settings
+  FULL_MATRIX_TEST: "${FULL_MATRIX_TEST}"
   FORCE_MATRIX_REBUILD: "${FORCE_MATRIX_REBUILD}"
   FORCE_IMAGE_REBUILD: "${FORCE_IMAGE_REBUILD}"
+  EXPORT_DOCKER_IMAGES: "${EXPORT_DOCKER_IMAGES}"
 EOF
 
     # Add test-type-specific environment variables

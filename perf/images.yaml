@@ -11,7 +11,9 @@ test-aliases:
   - alias: "images"
     value: "dotnet-v1.0|go-v0.45|js-v3.x|rust-v0.56"
   - alias: "baselines"
-    value: "https|quic-go|iperf"
+    value: "https|quic-go|iperf|quinn|tquic|tokio-quiche|tokio-tquic|quiche"
+  - alias: "default_baselines"
+    value: "https|quic-go|iperf|quinn"
   - alias: "go"
     value: "go-v0.45"
   - alias: "rust"
@@ -20,8 +22,8 @@ test-aliases:
     value: "js-v3.x"
   - alias: "dotnet"
     value: "dotnet-v1.0"
-  - alias: "failing" # as of 20 Jan 2026
-    value: "go-v0.45|js-v3.x|dotnet-v1.0|rust-v0.56 x rust-v0.56 (webrtc-direct)"
+  - alias: "failing" # As of 26 Feb 2026
+    value: "go-v0.45 x js-v3.x (webtransport)|js-v3.x x go-v0.45 (webtransport)|js-v3.x x js-v3.x (webtransport)|js-v3.x x dotnet-v1.0 (tcp, tls, yamux)|rust-v0.56 x dotnet-v1.0 (tcp, tls, yamux)|dotnet-v1.0 x go-v0.45 (tcp, noise, yamux)|dotnet-v1.0 x go-v0.45 (tcp, tls, yamux)|dotnet-v1.0 x go-v0.45 (quic-v1)|dotnet-v1.0 x rust-v0.56 (tcp, noise, yamux)|dotnet-v1.0 x rust-v0.56 (tcp, tls, yamux)|dotnet-v1.0 x rust-v0.56 (quic-v1)|dotnet-v1.0 x js-v3.x (tcp, noise, yamux)|dotnet-v1.0 x js-v3.x (tcp, tls, yamux)|dotnet-v1.0 x dotnet-v1.0 (quic-v1)"
 
 # Baseline implementations - Separate from main tests
 # These measure raw network/protocol performance for comparison
@@ -57,6 +59,56 @@ baselines:
     secureChannels: []
     muxers: []
 
+  # Quinn baseline (Rust QUIC)
+  - id: quinn
+    source:
+      type: local
+      path: images/quinn/v0.11
+      dockerfile: Dockerfile
+    transports: [quic]
+    secureChannels: []
+    muxers: []
+
+  # TQUIC baseline (Rust QUIC)
+  - id: tquic
+    source:
+      type: local
+      path: images/tquic/v1.6
+      dockerfile: Dockerfile
+    transports: [quic]
+    secureChannels: []
+    muxers: []
+
+  # tokio-quiche baseline (Rust QUIC)
+  - id: tokio-quiche
+    source:
+      type: local
+      path: images/tokio-quiche/v0.16
+      dockerfile: Dockerfile
+    transports: [quic]
+    secureChannels: []
+    muxers: []
+
+  # tokio-tquic baseline (Rust QUIC - async tquic wrapper)
+  - id: tokio-tquic
+    source:
+      type: local
+      path: images/tokio-tquic/v0.1
+      dockerfile: Dockerfile
+    transports: [quic]
+    secureChannels: []
+    muxers: []
+
+  # quiche baseline (Rust QUIC - raw quiche)
+  - id: quiche
+    source:
+      type: local
+      path: images/quiche/v0.26
+      dockerfile: Dockerfile
+    transports: [quic]
+    secureChannels: []
+    muxers: []
+
 # Implementation definitions
 # Docker image naming: perf-<id>
 implementations:
@@ -74,7 +126,9 @@ implementations:
       type: local
       path: images/rust/v0.56
       dockerfile: Dockerfile
-    transports: [quic-v1, tcp, webrtc-direct, ws]
+    # webrtc-direct removed: broken in this version (SRTP key length mismatch, see #20).
+    # Fixed upstream in webrtc-rs/webrtc#677. Re-enable when rust-libp2p cuts a new release with the fix.
+    transports: [quic-v1, tcp, ws]
     secureChannels: [noise, tls]
     muxers: [yamux, mplex]
 

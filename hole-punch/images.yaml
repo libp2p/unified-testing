@@ -27,7 +27,9 @@ relays:
       type: local
       path: images/rust/v0.56
       dockerfile: Dockerfile.relay
-    transports: [quic-v1, tcp, webrtc-direct, ws]
+    # webrtc-direct removed: broken in this version (SRTP key length mismatch, see #20).
+    # Fixed upstream in webrtc-rs/webrtc#677. Re-enable when rust-libp2p cuts a new release with the fix.
+    transports: [quic-v1, tcp, ws]
     secureChannels: [noise, tls]
     muxers: [yamux, mplex]
 
@@ -38,6 +40,8 @@ implementations:
       type: local
       path: images/rust/v0.56
       dockerfile: Dockerfile.peer
-    transports: [quic-v1, tcp, webrtc-direct, ws]
+    # webrtc-direct removed: broken in this version (SRTP key length mismatch, see #20).
+    # Fixed upstream in webrtc-rs/webrtc#677. Re-enable when rust-libp2p cuts a new release with the fix.
+    transports: [quic-v1, tcp, ws]
     secureChannels: [noise, tls]
     muxers: [yamux, mplex]
