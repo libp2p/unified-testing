@@ -11,7 +11,9 @@ test-aliases:
   - alias: "images"
     value: "dotnet-v1.0|go-v0.45|js-v3.x|rust-v0.56"
   - alias: "baselines"
-    value: "https|quic-go|iperf"
+    value: "https|quic-go|iperf|quinn|tquic|tokio-quiche|tokio-tquic|quiche"
+  - alias: "default_baselines"
+    value: "https|quic-go|iperf|quinn"
   - alias: "go"
     value: "go-v0.45"
   - alias: "rust"
@@ -54,6 +56,56 @@ baselines:
       path: images/iperf/v3.0
       dockerfile: Dockerfile
     transports: [tcp]
+    secureChannels: []
+    muxers: []
+
+  # Quinn baseline (Rust QUIC)
+  - id: quinn
+    source:
+      type: local
+      path: images/quinn/v0.11
+      dockerfile: Dockerfile
+    transports: [quic]
+    secureChannels: []
+    muxers: []
+
+  # TQUIC baseline (Rust QUIC)
+  - id: tquic
+    source:
+      type: local
+      path: images/tquic/v1.6
+      dockerfile: Dockerfile
+    transports: [quic]
+    secureChannels: []
+    muxers: []
+
+  # tokio-quiche baseline (Rust QUIC)
+  - id: tokio-quiche
+    source:
+      type: local
+      path: images/tokio-quiche/v0.16
+      dockerfile: Dockerfile
+    transports: [quic]
+    secureChannels: []
+    muxers: []
+
+  # tokio-tquic baseline (Rust QUIC - async tquic wrapper)
+  - id: tokio-tquic
+    source:
+      type: local
+      path: images/tokio-tquic/v0.1
+      dockerfile: Dockerfile
+    transports: [quic]
+    secureChannels: []
+    muxers: []
+
+  # quiche baseline (Rust QUIC - raw quiche)
+  - id: quiche
+    source:
+      type: local
+      path: images/quiche/v0.26
+      dockerfile: Dockerfile
+    transports: [quic]
     secureChannels: []
     muxers: []
 
