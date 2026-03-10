@@ -294,7 +294,7 @@ implementations:
     source:
       type: github
       repo: zen-eth/eth-p2p-z
-      commit: a517a15d7845698c56c37e9135d45eb437660845
+      commit: 28ea0722adf7325ae40a4498fe60efcae58ceee3
       dockerfile: interop/transport/Dockerfile
     transports: [quic-v1]
     secureChannels: []
