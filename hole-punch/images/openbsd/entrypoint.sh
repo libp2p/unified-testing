@@ -126,6 +126,29 @@ ip link set br-lan up
 
 echo "Bridges configured: br-wan ($WAN_IF + tap0), br-lan ($LAN_IF + tap1)"
 
+# --- Ensure transparent L2 forwarding for QEMU bridges ---
+# Docker loads br_netfilter which causes bridged frames to traverse iptables
+# FORWARD chain. Disable this for our bridges to prevent packet drops.
+for br in br-wan br-lan; do
+    for f in nf_call_iptables nf_call_ip6tables nf_call_arptables; do
+        [ -f "/sys/class/net/$br/bridge/$f" ] && echo 0 > "/sys/class/net/$br/bridge/$f"
+    done
+done
+
+# Also try namespace-wide sysctl (exists only if br_netfilter is loaded)
+for f in /proc/sys/net/bridge/bridge-nf-call-iptables \
+         /proc/sys/net/bridge/bridge-nf-call-ip6tables \
+         /proc/sys/net/bridge/bridge-nf-call-arptables; do
+    [ -f "$f" ] && echo 0 > "$f" 2>/dev/null || true
+done
+
+# Disable reverse path filtering on ALL interfaces (including newly created bridges/taps)
+for f in /proc/sys/net/ipv4/conf/*/rp_filter; do
+    echo 0 > "$f" 2>/dev/null || true
+done
+
+echo "Bridge netfilter disabled, rp_filter disabled on all interfaces"
+
 # --- Create config drive ISO ---
 CONFIG_DIR=$(mktemp -d)
 

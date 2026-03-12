@@ -95,7 +95,7 @@ FROM debian:13-slim
 
 # Install runtime dependencies for QEMU, bridging, and ISO generation
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    qemu-system-x86 qemu-utils bridge-utils iproute2 genisoimage \
+    qemu-system-x86 qemu-utils bridge-utils iproute2 genisoimage procps \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy installed HDD from installer stage
