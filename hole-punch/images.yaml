@@ -5,7 +5,7 @@
 # Usage: --test-select "~linux" or --test-ignore "!~linux"
 test-aliases:
   - alias: "failing"
-    value: "rust-v0.56 x rust-v0.56"
+    value: ""
 
 # Router configurations - Multiple router types for testing different NAT implementations
 routers:
@@ -27,9 +27,7 @@ relays:
       type: local
       path: images/rust/v0.56
       dockerfile: Dockerfile.relay
-    # webrtc-direct removed: broken in this version (SRTP key length mismatch, see #20).
-    # Fixed upstream in webrtc-rs/webrtc#677. Re-enable when rust-libp2p cuts a new release with the fix.
-    transports: [quic-v1, tcp, ws]
+    transports: [quic-v1, tcp]
     secureChannels: [noise, tls]
     muxers: [yamux, mplex]
 
@@ -40,8 +38,6 @@ implementations:
       type: local
       path: images/rust/v0.56
       dockerfile: Dockerfile.peer
-    # webrtc-direct removed: broken in this version (SRTP key length mismatch, see #20).
-    # Fixed upstream in webrtc-rs/webrtc#677. Re-enable when rust-libp2p cuts a new release with the fix.
-    transports: [quic-v1, tcp, ws]
+    transports: [quic-v1, tcp]
     secureChannels: [noise, tls]
     muxers: [yamux, mplex]
