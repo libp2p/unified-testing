@@ -310,10 +310,8 @@ services:
       wan:
         ipv4_address: ${RELAY_IP}
         interface_name: wan0
-        gw_priority: 1000
       hole-punch-network:
         interface_name: redis0
-        gw_priority: 100
     cap_add:
       - NET_ADMIN
     environment:
@@ -327,11 +325,9 @@ ${RELAY_ENV}
       wan:
         ipv4_address: ${DIALER_ROUTER_WAN_IP}
         interface_name: wan0
-        gw_priority: 1000
       lan-dialer:
         ipv4_address: ${DIALER_ROUTER_LAN_IP}
         interface_name: lan0
-        gw_priority: 100
     cap_add:
       - NET_ADMIN
     sysctls:
@@ -354,11 +350,9 @@ ${DIALER_ROUTER_ENV}
       wan:
         ipv4_address: ${LISTENER_ROUTER_WAN_IP}
         interface_name: wan0
-        gw_priority: 1000
       lan-listener:
         ipv4_address: ${LISTENER_ROUTER_LAN_IP}
         interface_name: lan0
-        gw_priority: 100
     cap_add:
       - NET_ADMIN
     sysctls:
@@ -381,10 +375,8 @@ ${LISTENER_ROUTER_ENV}
       lan-dialer:
         ipv4_address: ${DIALER_IP}
         interface_name: lan0
-        gw_priority: 1000
       hole-punch-network:
         interface_name: redis0
-        gw_priority: 1000
     cap_add:
       - NET_ADMIN
 $(build_depends_on_block "${DIALER_ROUTER_ID}" "dialer-router" "proxy-${TEST_KEY}")
@@ -399,10 +391,8 @@ ${DIALER_ENV}
       lan-listener:
         ipv4_address: ${LISTENER_IP}
         interface_name: lan0
-        gw_priority: 1000
       hole-punch-network:
         interface_name: redis0
-        gw_priority: 1000
     cap_add:
       - NET_ADMIN
 $(build_depends_on_block "${LISTENER_ROUTER_ID}" "listener-router" "proxy-${TEST_KEY}")
@@ -443,10 +433,8 @@ services:
       wan:
         ipv4_address: ${RELAY_IP}
         interface_name: wan0
-        gw_priority: 1000
       hole-punch-network:
         interface_name: redis0
-        gw_priority: 100
     cap_add:
       - NET_ADMIN
     environment:
@@ -460,11 +448,9 @@ ${RELAY_ENV}
       wan:
         ipv4_address: ${DIALER_ROUTER_WAN_IP}
         interface_name: wan0
-        gw_priority: 1000
       lan-dialer:
         ipv4_address: ${DIALER_ROUTER_LAN_IP}
         interface_name: lan0
-        gw_priority: 100
     cap_add:
       - NET_ADMIN
     sysctls:
@@ -487,11 +473,9 @@ ${DIALER_ROUTER_ENV}
       wan:
         ipv4_address: ${LISTENER_ROUTER_WAN_IP}
         interface_name: wan0
-        gw_priority: 1000
       lan-listener:
         ipv4_address: ${LISTENER_ROUTER_LAN_IP}
         interface_name: lan0
-        gw_priority: 100
     cap_add:
       - NET_ADMIN
     sysctls:
@@ -514,10 +498,8 @@ ${LISTENER_ROUTER_ENV}
       lan-dialer:
         ipv4_address: ${DIALER_IP}
         interface_name: lan0
-        gw_priority: 1000
       hole-punch-network:
         interface_name: redis0
-        gw_priority: 1000
     cap_add:
       - NET_ADMIN
 $(build_depends_on_block "${DIALER_ROUTER_ID}" "dialer-router")
@@ -532,10 +514,8 @@ ${DIALER_ENV}
       lan-listener:
         ipv4_address: ${LISTENER_IP}
         interface_name: lan0
-        gw_priority: 1000
       hole-punch-network:
         interface_name: redis0
-        gw_priority: 1000
     cap_add:
       - NET_ADMIN
 $(build_depends_on_block "${LISTENER_ROUTER_ID}" "listener-router")
