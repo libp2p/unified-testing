@@ -1,4 +1,3 @@
-/* eslint-disable complexity */
 import { noise } from '@chainsafe/libp2p-noise'
 import { yamux } from '@chainsafe/libp2p-yamux'
 import { identify } from '@libp2p/identify'
@@ -8,9 +7,11 @@ import { tcp } from '@libp2p/tcp'
 import { webSockets } from '@libp2p/websockets'
 import { createLibp2p } from 'libp2p'
 import type { Identify } from '@libp2p/identify'
-import type { Libp2p } from '@libp2p/interface'
 import type { Ping } from '@libp2p/ping'
 import type { Libp2pOptions } from 'libp2p'
+
+// Use the Libp2p type from the main libp2p package
+export type MiscNode = Awaited<ReturnType<typeof createLibp2p<{ ping: Ping, identify: Identify }>>>
 
 // Test framework env vars (uppercase)
 const isDialer: boolean = process.env.IS_DIALER === 'true'
@@ -22,8 +23,6 @@ const SECURE_CHANNEL = process.env.SECURE_CHANNEL
 const MUXER = process.env.MUXER
 const IP = process.env.LISTENER_IP
 if (!IP) { throw new Error('LISTENER_IP environment variable is required') }
-
-export type MiscNode = Libp2p<{ ping: Ping, identify: Identify }>
 
 export async function getLibp2p (): Promise<MiscNode> {
   const options: Libp2pOptions<{ ping: Ping, identify: Identify }> = {
