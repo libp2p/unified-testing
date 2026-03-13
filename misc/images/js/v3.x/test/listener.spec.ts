@@ -1,7 +1,6 @@
 /* eslint-disable no-console */
-/* eslint-env mocha */
+/* global describe, it, beforeEach, afterEach */
 
-import { multiaddr } from '@multiformats/multiaddr'
 import { getLibp2p } from './fixtures/get-libp2p.js'
 import { redisProxy } from './fixtures/redis-proxy.js'
 import type { MiscNode } from './fixtures/get-libp2p.js'
@@ -71,18 +70,35 @@ describe('misc listener – echo', function () {
     if (!testKey) { throw new Error('TEST_KEY environment variable is required') }
 
     // Register echo protocol handler: collect all bytes, then write them back
-    await node.handle('/echo/1.0.0', async ({ stream }) => {
+    await node.handle('/echo/1.0.0', async (stream: any) => {
       try {
-        const chunks: Uint8Array[] = []
-        for await (const chunk of stream.source) {
-          chunks.push(chunk instanceof Uint8Array ? chunk : chunk.subarray())
-        }
-        const totalLen = chunks.reduce((acc, c) => acc + c.length, 0)
-        const data = new Uint8Array(totalLen)
-        let offset = 0
-        for (const c of chunks) { data.set(c, offset); offset += c.length }
-        console.error(`[echo] echoing back ${data.length} bytes`)
-        await stream.sink((async function * () { yield data })())
+        // In libp2p v3, we use it-pipe for stream operations
+        const { pipe } = await import('it-pipe')
+        
+        // Use pipe to echo data back
+        await pipe(
+          stream as any,
+          async function (source: any) {
+            // Collect all incoming chunks
+            const chunks: Uint8Array[] = []
+            for await (const chunk of source) {
+              chunks.push(chunk instanceof Uint8Array ? chunk : chunk.subarray())
+            }
+            
+            // Reassemble the data
+            const totalLen = chunks.reduce((acc, c) => acc + c.length, 0)
+            const echoData = new Uint8Array(totalLen)
+            let offset = 0
+            for (const c of chunks) { echoData.set(c, offset); offset += c.length }
+            console.error(`[echo] echoing back ${echoData.length} bytes`)
+            
+            // Return the data as an async generator
+            return (async function * () {
+              yield echoData
+            })()
+          },
+          stream as any
+        )
       } catch (err: any) {
         console.error(`[echo] handler error: ${err?.message ?? err}`)
       }

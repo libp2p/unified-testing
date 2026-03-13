@@ -1,5 +1,5 @@
 /* eslint-disable no-console */
-/* eslint-env mocha */
+/* global describe, it, beforeEach, afterEach */
 
 import { multiaddr } from '@multiformats/multiaddr'
 import { getLibp2p } from './fixtures/get-libp2p.js'
@@ -25,7 +25,7 @@ async function getListenerAddr (testKey: string): Promise<string> {
 // PING test (dialer side)
 // Same behaviour as the transport interop ping test.
 // ─────────────────────────────────────────────────────────────────────────────
-describe(`misc dialer – ping`, function () {
+describe('misc dialer – ping', function () {
   if (!isDialer || PROTOCOL !== 'ping') { return }
 
   this.timeout(timeoutMs + 30_000)
@@ -63,7 +63,7 @@ describe(`misc dialer – ping`, function () {
 // Opens a /echo/1.0.0 stream, sends a payload, reads back the echoed bytes,
 // and verifies payload integrity.
 // ─────────────────────────────────────────────────────────────────────────────
-describe(`misc dialer – echo`, function () {
+describe('misc dialer – echo', function () {
   if (!isDialer || PROTOCOL !== 'echo') { return }
 
   this.timeout(timeoutMs + 30_000)
@@ -93,15 +93,25 @@ describe(`misc dialer – echo`, function () {
 
     const echoStart = Date.now()
 
-    // Write payload then close the write side
-    const writer = stream.sink
-    await writer((async function * () { yield payload })())
-
-    // Read back the echoed bytes
-    const chunks: Uint8Array[] = []
-    for await (const chunk of stream.source) {
-      chunks.push(chunk instanceof Uint8Array ? chunk : chunk.subarray())
+    // Write payload and read response using it-pipe
+    const { pipe } = await import('it-pipe')
+    
+    // Create source for the payload
+    const source = async function * () {
+      yield payload
     }
+    
+    // Use pipe to send data and collect response
+    const chunks: Uint8Array[] = []
+    await pipe(
+      source(),
+      stream as any,
+      async function (source: any) {
+        for await (const chunk of source) {
+          chunks.push(chunk instanceof Uint8Array ? chunk : chunk.subarray())
+        }
+      }
+    )
 
     const echoRTT = Date.now() - echoStart
 
@@ -133,7 +143,7 @@ describe(`misc dialer – echo`, function () {
 // Dials the listener, waits for the identify push to arrive, and logs the
 // protocol list the remote peer advertises.
 // ─────────────────────────────────────────────────────────────────────────────
-describe(`misc dialer – identify`, function () {
+describe('misc dialer – identify', function () {
   if (!isDialer || PROTOCOL !== 'identify') { return }
 
   this.timeout(timeoutMs + 30_000)
@@ -163,7 +173,7 @@ describe(`misc dialer – identify`, function () {
       abort.addEventListener('abort', () => reject(new Error('Timeout waiting for identify')))
 
       const check = (): void => {
-        node.peerStore.get(remotePeer).then((peer) => {
+        node.peerStore.get(remotePeer).then((peer: any) => {
           if (peer != null && peer.protocols.length > 0) {
             resolve([...peer.protocols])
           }
