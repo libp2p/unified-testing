@@ -25,7 +25,13 @@ export default {
       }
       const isDialer = process.env.IS_DIALER === 'true'
 
-      const redisClient = createClient({ url: `redis://${redisAddr}` })
+      const redisClient = createClient({ 
+        url: `redis://${redisAddr}`,
+        socket: {
+          connectTimeout: 30000,
+          commandTimeout: 30000
+        }
+      })
       redisClient.on('error', (err) => {
         console.error('Redis client error:', err)
       })
@@ -66,13 +72,13 @@ export default {
         } catch (err) {
           console.error('Error in redis command:', err)
           res.writeHead(500, { 'Access-Control-Allow-Origin': '*' })
-          res.end(err.toString())
+          res.end(JSON.stringify({ message: err.toString() }))
         }
       }
 
       start = Date.now()
       const proxyServer = http.createServer(requestListener)
-      proxyServer.listen(0)
+      proxyServer.listen(0, '0.0.0.0') // Listen on all interfaces for Docker compatibility
       await pEvent(proxyServer, 'listening', { signal: AbortSignal.timeout(30_000) })
       console.error('redis proxy listening on port', proxyServer.address().port, 'after', Date.now() - start, 'ms')
 
@@ -87,8 +93,16 @@ export default {
     },
 
     async after (_, { proxyServer, redisClient }) {
-      await new Promise(resolve => { proxyServer?.close(() => resolve(undefined)) })
-      try { await redisClient.disconnect() } catch {}
+      if (proxyServer) {
+        await new Promise(resolve => { proxyServer.close(() => resolve(undefined)) })
+      }
+      if (redisClient) {
+        try { 
+          await redisClient.disconnect() 
+        } catch (err) {
+          console.error('Error disconnecting Redis client:', err)
+        }
+      }
     }
   }
 }
