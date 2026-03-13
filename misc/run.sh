@@ -1,4 +1,7 @@
-#!/usr/bin/env bash
+#!/opt/homebrew/bin/bash
+
+# Add GNU utilities to PATH for compatibility
+export PATH="/opt/homebrew/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/gnu-sed/libexec/gnubin:/opt/homebrew/opt/gnu-tar/libexec/gnubin:/opt/homebrew/opt/bc/bin:/opt/homebrew/opt/zip/bin:/opt/homebrew/opt/unzip/bin:$PATH"
 
 # run in strict failure mode
 set -euo pipefail
@@ -538,7 +541,8 @@ run_test() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: Test script failed with exit code" >> "${log_file}"
   fi
 
-  if ! grep -q "name: ${name}" "${TEST_PASS_DIR}/results.yaml.tmp" 2>/dev/null; then
+  # Only add fallback entry if the test script completely failed to write any result
+  if [ "${exit_code}" -ne 0 ] && ! grep -q "name: ${name}" "${TEST_PASS_DIR}/results.yaml.tmp" 2>/dev/null; then
     (
       flock -x 200
       cat >> "${TEST_PASS_DIR}/results.yaml.tmp" <<EOF
