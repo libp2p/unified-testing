@@ -1,4 +1,6 @@
-#!/usr/bin/env bash
+#!/opt/homebrew/bin/bash
+# Add GNU utilities to PATH for compatibility
+export PATH="/opt/homebrew/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/gnu-sed/libexec/gnubin:/opt/homebrew/opt/gnu-tar/libexec/gnubin:/opt/homebrew/opt/bc/bin:/opt/homebrew/opt/zip/bin:/opt/homebrew/opt/unzip/bin:$PATH"
 # Generate test matrix from ${IMAGES_YAML} with filtering
 # Outputs test-matrix.yaml with content-addressed caching
 # Permutations: dialer × listener × transport × secureChannel × muxer × protocol
@@ -422,11 +424,11 @@ total_selected=0
 total_ignored=0
 for (( w=0; w<WORKER_COUNT; w++ )); do
   if [ -f "${TEST_PASS_DIR}/worker-${w}-selected.yaml" ]; then
-    count=$(grep -c "^  - id:" "${TEST_PASS_DIR}/worker-${w}-selected.yaml" 2>/dev/null || echo "0")
+    count=$(grep -c "^  - id:" "${TEST_PASS_DIR}/worker-${w}-selected.yaml" 2>/dev/null) || count=0
     total_selected=$(( total_selected + count ))
   fi
   if [ -f "${TEST_PASS_DIR}/worker-${w}-ignored.yaml" ]; then
-    count=$(grep -c "^  - id:" "${TEST_PASS_DIR}/worker-${w}-ignored.yaml" 2>/dev/null || echo "0")
+    count=$(grep -c "^  - id:" "${TEST_PASS_DIR}/worker-${w}-ignored.yaml" 2>/dev/null) || count=0
     total_ignored=$(( total_ignored + count ))
   fi
 done
