@@ -1,0 +1,33 @@
+# Alternative Dockerfile with newer Playwright version for better Node.js compatibility
+# Use this if the v1.55.0 image has Node.js version compatibility issues
+FROM mcr.microsoft.com/playwright:v1.57.0
+
+WORKDIR /app
+
+# Copy package files first for better Docker layer caching
+COPY package*.json .aegir.js tsconfig.json ./
+
+# Set environment variables for better npm behavior in Docker
+ENV CI=true
+ENV NODE_ENV=production
+ENV NPM_CONFIG_LOGLEVEL=warn
+# Increase Node.js memory limit for build processes
+ENV NODE_OPTIONS="--max-old-space-size=4096"
+
+# Install dependencies with increased memory and timeout settings
+# to handle potential build issues with updated libp2p packages
+RUN npm ci --no-audit --no-fund --maxsockets 1 || \
+    (echo "First npm ci failed, retrying with legacy peer deps..." && \
+     npm ci --no-audit --no-fund --legacy-peer-deps --maxsockets 1)
+
+# Copy source files after dependency installation
+COPY src ./src
+COPY test ./test
+
+# Build the project with error handling
+RUN npm run build || \
+    (echo "Build failed, checking Node.js version and retrying..." && \
+     node --version && npm --version && \
+     npm run build)
+
+ENTRYPOINT ["npm", "test", "--", "-t", "node", "--", "--exit"]
