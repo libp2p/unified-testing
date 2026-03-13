@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# Merges test results from all three test suites (transport, hole-punch, perf)
+# Merges test results from all four test suites (transport, hole-punch, perf, misc)
 # into a single combined YAML file for the unified website dashboard.
 #
-# Usage: merge-interop-results.sh <transport-dir> <hole-punch-dir> <perf-dir> <output-file> [workflow-run-url]
+# Usage: merge-interop-results.sh <transport-dir> <hole-punch-dir> <perf-dir> <misc-dir> <output-file> [workflow-run-url]
 #
 # Arguments:
 #   transport-dir   - Directory containing transport test results (results.yaml)
 #   hole-punch-dir  - Directory containing hole-punch test results (results.yaml)
 #   perf-dir        - Directory containing perf test results (results.yaml)
+#   misc-dir        - Directory containing misc test results (results.yaml)
 #   output-file     - Output file path (default: /tmp/daily-full-interop.yml)
 #   workflow-run-url - Optional GitHub Actions workflow run URL
 
@@ -17,8 +18,9 @@ set -euo pipefail
 TRANSPORT_DIR="${1:-}"
 HOLE_PUNCH_DIR="${2:-}"
 PERF_DIR="${3:-}"
-OUTPUT_FILE="${4:-/tmp/daily-full-interop.yml}"
-WORKFLOW_RUN_URL="${5:-}"
+MISC_DIR="${4:-}"
+OUTPUT_FILE="${5:-/tmp/daily-full-interop.yml}"
+WORKFLOW_RUN_URL="${6:-}"
 
 # Create output directory
 OUTPUT_DIR=$(dirname "$OUTPUT_FILE")
@@ -65,6 +67,7 @@ echo "Merging interop results..."
 echo "  Transport dir: ${TRANSPORT_DIR:-<not provided>}"
 echo "  Hole-punch dir: ${HOLE_PUNCH_DIR:-<not provided>}"
 echo "  Perf dir: ${PERF_DIR:-<not provided>}"
+echo "  Misc dir: ${MISC_DIR:-<not provided>}"
 echo "  Output: $OUTPUT_FILE"
 echo "  Timestamp: $GENERATED_AT"
 
@@ -330,6 +333,58 @@ perf:
   results:
     []
 PERF_EOF
+fi
+
+# Process Misc results
+echo "" >> "$OUTPUT_FILE"
+if check_results_file "$MISC_DIR"; then
+    echo "  Found misc results"
+    MISC_RESULTS="$MISC_DIR/results.yaml"
+
+    # Extract metadata
+    TEST_PASS=$(extract_section "$MISC_RESULTS" '.metadata.testPass // ""')
+    STARTED_AT=$(extract_section "$MISC_RESULTS" '.metadata.startedAt // ""')
+    COMPLETED_AT=$(extract_section "$MISC_RESULTS" '.metadata.completedAt // ""')
+    DURATION=$(extract_section "$MISC_RESULTS" '.metadata.duration // ""')
+
+    # Extract summary counts
+    TOTAL=$(extract_section "$MISC_RESULTS" '.summary.total // 0')
+    PASSED=$(extract_section "$MISC_RESULTS" '.summary.passed // 0')
+    FAILED=$(extract_section "$MISC_RESULTS" '.summary.failed // 0')
+
+    cat >> "$OUTPUT_FILE" << EOF
+misc:
+  metadata:
+    test-pass: "$TEST_PASS"
+    started-at: "$STARTED_AT"
+    completed-at: "$COMPLETED_AT"
+    duration: "$DURATION"
+  summary:
+    total: $TOTAL
+    passed: $PASSED
+    failed: $FAILED
+  results:
+EOF
+
+    MISC_TEST_COUNT=$(yq eval '.tests | length // 0' "$MISC_RESULTS" 2>/dev/null || echo "0")
+    if [ "$MISC_TEST_COUNT" -gt 0 ]; then
+        yq '.tests | map({
+            "name": .name,
+            "dialer": .dialer,
+            "listener": .listener,
+            "transport": .transport,
+            "secure-channel": (.secureChannel // null),
+            "muxer": (.muxer // null),
+            "protocol": (.protocol // null),
+            "status": .status
+        })' "$MISC_RESULTS" 2>/dev/null | sed 's/^/    /' >> "$OUTPUT_FILE"
+    else
+        echo "    []" >> "$OUTPUT_FILE"
+    fi
+
+else
+    echo "  No misc results found"
+    echo "misc: null" >> "$OUTPUT_FILE"
 fi
 
 echo ""

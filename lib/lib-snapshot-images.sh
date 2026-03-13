@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Common library for saving Docker images in snapshots
-# Used by create-snapshot.sh in transport, hole-punch, and perf
+# Used by create-snapshot.sh in transport, hole-punch, perf, and misc
 
 # Source formatting library if not already loaded
 if ! type print_message &>/dev/null; then
@@ -10,7 +10,7 @@ fi
 
 # Save all Docker images needed for tests
 # Usage: save_docker_images_for_tests <snapshot_dir> <test_type>
-# test_type: "transport", "hole-punch", or "perf"
+# test_type: "transport", "hole-punch", "perf", or "misc"
 save_docker_images_for_tests() {
   local snapshot_dir="$1"
   local test_type="$2"
