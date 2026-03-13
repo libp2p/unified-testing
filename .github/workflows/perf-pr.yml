@@ -22,7 +22,7 @@ on:
       baseline-select:
         description: 'Select specific baseline tests (pipe-separated substrings)'
         required: false
-        default: ''
+        default: '~default_baselines'
         type: string
       baseline-ignore:
         description: 'Ignore specific baseline tests (pipe-separated substrings)'
@@ -119,7 +119,12 @@ jobs:
             # would conflict and can yield zero selected tests.
             echo "test-ignore=~failing" >> $GITHUB_OUTPUT
 
-            echo "baseline-select=${{ steps.detect.outputs.changed-baselines }}" >> $GITHUB_OUTPUT
+            CHANGED_BASELINES="${{ steps.detect.outputs.changed-baselines }}"
+            if [ -z "$CHANGED_BASELINES" ]; then
+              echo "baseline-select=~default_baselines" >> $GITHUB_OUTPUT
+            else
+              echo "baseline-select=$CHANGED_BASELINES" >> $GITHUB_OUTPUT
+            fi
 
             # Same rule for baselines: avoid negating selected values.
             echo "baseline-ignore=~failing" >> $GITHUB_OUTPUT
