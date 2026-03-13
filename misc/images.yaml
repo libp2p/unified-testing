@@ -54,6 +54,7 @@ implementations:
     secureChannels: [tls, noise]
     muxers: [yamux]
     protocols: [ping]
+    legacy: true
 
   # Rust - rust-libp2p v0.56
   # Supports ping and identify protocols via the native interop test binary.
@@ -68,6 +69,7 @@ implementations:
     secureChannels: [tls, noise]
     muxers: [yamux, mplex]
     protocols: [ping]
+    legacy: true
 
   # Python - py-libp2p v0.x
   # Supports ping protocol via the interop test binary.
