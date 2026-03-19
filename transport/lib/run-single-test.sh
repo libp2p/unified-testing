@@ -49,9 +49,16 @@ TEST_SLUG=$(echo "${TEST_NAME}" | sed 's/[^a-zA-Z0-9-]/_/g')
 LOG_FILE="${TEST_PASS_DIR}/logs/${TEST_SLUG}.log"
 >> "${LOG_FILE}"
 
+# Use unique compose project/container names per test pass to avoid stale
+# docker compose state collisions when rerunning the same test selection.
+RUN_KEY=$(compute_test_key "${TEST_PASS_NAME}-${TEST_NAME}")
+COMPOSE_PROJECT_NAME="${TEST_SLUG}_${RUN_KEY}"
+CONTAINER_PREFIX="${COMPOSE_PROJECT_NAME}"
+
 print_debug "test key: ${TEST_KEY}"
 print_debug "test slug: ${TEST_SLUG}"
 print_debug "log file: ${LOG_FILE}"
+print_debug "compose project: ${COMPOSE_PROJECT_NAME}"
 
 log_message "[$((${TEST_INDEX} + 1))] ${TEST_NAME} (key: ${TEST_KEY})"
 
@@ -97,7 +104,7 @@ if [ "${IS_LEGACY_TEST}" == "true" ]; then
   # Legacy test: external shared network + Redis proxy service
   # The proxy translates legacy key names to modern format and forwards to global Redis
   cat > "${COMPOSE_FILE}" <<EOF
-name: ${TEST_SLUG}
+name: ${COMPOSE_PROJECT_NAME}
 
 networks:
   default:
@@ -110,7 +117,7 @@ networks:
 services:
   proxy-${TEST_KEY}:
     image: libp2p-redis-proxy
-    container_name: ${TEST_SLUG}_proxy
+    container_name: ${CONTAINER_PREFIX}_proxy
     networks:
       - transport-network
     environment:
@@ -119,7 +126,7 @@ services:
 
   listener:
     image: "${LISTENER_IMAGE}"
-    container_name: ${TEST_SLUG}_listener
+    container_name: ${CONTAINER_PREFIX}_listener
     init: true
     depends_on:
       - proxy-${TEST_KEY}
@@ -130,7 +137,8 @@ ${LISTENER_ENV}
 
   dialer:
     image: "${DIALER_IMAGE}"
-    container_name: ${TEST_SLUG}_dialer
+    container_name: ${CONTAINER_PREFIX}_dialer
+    init: true
     depends_on:
       - listener
       - proxy-${TEST_KEY}
@@ -142,7 +150,7 @@ EOF
 else
   # Modern test: external shared network, no proxy needed
   cat > "${COMPOSE_FILE}" <<EOF
-name: ${TEST_SLUG}
+name: ${COMPOSE_PROJECT_NAME}
 
 networks:
   default:
@@ -155,7 +163,7 @@ networks:
 services:
   listener:
     image: "${LISTENER_IMAGE}"
-    container_name: ${TEST_SLUG}_listener
+    container_name: ${CONTAINER_PREFIX}_listener
     init: true
     networks:
       - transport-network
@@ -164,7 +172,8 @@ ${LISTENER_ENV}
 
   dialer:
     image: "${DIALER_IMAGE}"
-    container_name: ${TEST_SLUG}_dialer
+    container_name: ${CONTAINER_PREFIX}_dialer
+    init: true
     depends_on:
       - listener
     networks:
@@ -198,8 +207,8 @@ else
         echo "" >> "${LOG_FILE}"
         log_error "Test timed out after ${TEST_TIMEOUT} seconds"
     else
-        EXIT_CODE=1
-        log_error "  ✗ Test failed"
+        EXIT_CODE="${TEST_EXIT}"
+        log_error "  ✗ Test failed (exit code ${TEST_EXIT})"
     fi
 fi
 
@@ -230,6 +239,21 @@ if [ -n "${DIALER_YAML}" ]; then
   if echo "${DIALER_YAML}" | head -1 | grep -q '^-'; then
     DIALER_YAML=""
   fi
+fi
+
+# Handle exit code 143 (SIGTERM): When the listener exits before the dialer,
+# docker-compose's --abort-on-container-exit sends SIGTERM to the dialer.
+# Slow-to-shutdown implementations (e.g. JVM) exit with 143 even though the
+# test completed successfully. If we have valid measurement data, treat as pass.
+# See: https://github.com/libp2p/unified-testing/issues/16
+if [ "${EXIT_CODE}" -eq 143 ] && [ -n "${DIALER_YAML}" ]; then
+  log_message "  → Dialer received SIGTERM (exit 143) but produced valid results — treating as pass"
+  EXIT_CODE=0
+fi
+
+# Normalize any remaining non-zero exit code to 1 for consistent status reporting
+if [ "${EXIT_CODE}" -ne 0 ]; then
+  EXIT_CODE=1
 fi
 
 # Save complete result to individual file

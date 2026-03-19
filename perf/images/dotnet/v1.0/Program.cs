@@ -110,8 +110,8 @@ class Program
         }
         logger.LogInformation("Listener IP: {ListenerIp}", listenerIp);
 
-        // Connect to Redis
-        var redis = await ConnectionMultiplexer.ConnectAsync(redisAddr);
+        // Connect to Redis with retries because listener and redis can start concurrently.
+        using var redis = await ConnectRedisWithRetry(logger, redisAddr);
         var db = redis.GetDatabase();
         logger.LogInformation("Connected to Redis at {RedisAddr}", redisAddr);
 
@@ -196,8 +196,8 @@ class Program
     {
         logger.LogInformation("Starting perf dialer...");
 
-        // Connect to Redis
-        var redis = await ConnectionMultiplexer.ConnectAsync(redisAddr);
+        // Connect to Redis with retries because dialer can start before Redis is ready.
+        using var redis = await ConnectRedisWithRetry(logger, redisAddr);
         var db = redis.GetDatabase();
         logger.LogInformation("Connected to Redis at {RedisAddr}", redisAddr);
 
@@ -411,6 +411,49 @@ class Program
             Outliers = outliers,
             Samples = samples
         };
+    }
+
+    static ConfigurationOptions BuildRedisOptions(string redisAddr)
+    {
+        var options = ConfigurationOptions.Parse(redisAddr);
+        options.AbortOnConnectFail = false;
+        options.ConnectRetry = 3;
+        options.ConnectTimeout = 5000;
+        options.SyncTimeout = 5000;
+        options.KeepAlive = 15;
+        options.ReconnectRetryPolicy = new ExponentialRetry(1000);
+        return options;
+    }
+
+    static async Task<ConnectionMultiplexer> ConnectRedisWithRetry(ILogger logger, string redisAddr, int maxAttempts = 20)
+    {
+        var options = BuildRedisOptions(redisAddr);
+        Exception? lastError = null;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                var redis = await ConnectionMultiplexer.ConnectAsync(options);
+                if (attempt > 1)
+                {
+                    logger.LogInformation("Connected to Redis after {Attempts} attempts", attempt);
+                }
+                return redis;
+            }
+            catch (Exception ex) when (ex is RedisConnectionException || ex is SocketException || ex is TimeoutException)
+            {
+                lastError = ex;
+                logger.LogWarning("Redis connect attempt {Attempt}/{MaxAttempts} failed: {Message}", attempt, maxAttempts, ex.Message);
+                if (attempt == maxAttempts)
+                {
+                    break;
+                }
+                await Task.Delay(1000);
+            }
+        }
+
+        throw new InvalidOperationException($"Failed to connect to Redis at {redisAddr} after {maxAttempts} attempts", lastError);
     }
 
     static double Percentile(List<double> sortedValues, double p)
