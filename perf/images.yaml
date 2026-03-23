@@ -104,7 +104,7 @@ implementations:
     source:
       type: github
       repo: asabya/py-libp2p
-      commit: 9a9a4a62a50457394ad7eac315150f9ee45510eb
+      commit: 112b7cf7f65d7f47dc7f655d8fe572b0f3f3b820
       dockerfile: interop/perf/Dockerfile
     transports: [tcp, ws]
     secureChannels: [noise, tls]
