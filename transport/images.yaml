@@ -271,10 +271,10 @@ implementations:
     source:
       type: github
       repo: NethermindEth/dotnet-libp2p
-      commit: e46c0227b3916552162fde18f258e22790429d2f
+      commit: 960726885ca467fd2205bbb0fa4821a34b9e8f31
       dockerfile: src/samples/transport-interop/Dockerfile
     transports: [tcp, quic-v1]
-    secureChannels: [noise]
+    secureChannels: [tls, noise]
     muxers: [yamux]
 
   # Zig implementation
