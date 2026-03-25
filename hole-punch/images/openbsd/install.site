@@ -1,0 +1,15 @@
+#!/bin/sh
+# install.site - OpenBSD post-install hook
+# Runs automatically after sets are extracted during autoinstall.
+#
+# Static config files (pf.conf, rc.local, rc.conf.local, firstboot_halt)
+# are included directly in site78.tgz and extracted before this script runs.
+# This script only handles operations that require dynamic modification.
+
+# --- Enable IP forwarding persistently ---
+echo "net.inet.ip.forwarding=1" >> /etc/sysctl.conf
+
+# --- Remove DHCP-based hostname.vio0 from install (rc.local sets it dynamically) ---
+rm -f /etc/hostname.vio0
+
+echo "install.site: Configuration complete."
