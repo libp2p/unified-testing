@@ -359,7 +359,7 @@ for relay_id in "${all_relay_ids[@]}"; do
   relay_secure["${relay_id}"]="${secure}"
   relay_muxers["${relay_id}"]="${muxers}"
   relay_dial_only["${relay_id}"]="${dial_only}"
-  if [ -n "${commit}" ]; then
+  if [ -n "${commit}" ] && [ "${commit}" != "null" ]; then
     relay_commit["${relay_id}"]="${commit}"
   fi
 done
@@ -377,7 +377,7 @@ declare -A router_commit
 for router_id in "${all_router_ids[@]}"; do
   commit=$(yq eval ".routers[] | select (.id == \"${router_id}\") | .source.commit" "${IMAGES_YAML}" 2>/dev/null || echo "")
 
-  if [ -n "${commit}" ]; then
+  if [ -n "${commit}" ] && [ "${commit}" != "null" ]; then
     router_commit["${router_id}"]="${commit}"
   fi
 done
@@ -409,7 +409,7 @@ for image_id in "${all_image_ids[@]}"; do
   image_secure["${image_id}"]="${secure}"
   image_muxers["${image_id}"]="${muxers}"
   image_dial_only["${image_id}"]="${dial_only}"
-  if [ -n "${commit}" ]; then
+  if [ -n "${commit}" ] && [ "${commit}" != "null" ]; then
     image_commit["${image_id}"]="${commit}"
   fi
   image_legacy["${image_id}"]="${legacy}"
@@ -556,8 +556,8 @@ generate_tests_worker() {
 
         print_debug "selecting listener router: ${listener_router_id}"
 
-        # Iterate through all dialers
-        for dialer_id in "${all_image_ids[@]}"; do
+        # Iterate through this worker's chunk of dialers
+        for dialer_id in "${dialer_chunk[@]}"; do
           dialer_transports="${image_transports[$dialer_id]}"
           dialer_secure="${image_secure[$dialer_id]}"
           dialer_muxers="${image_muxers[$dialer_id]}"
@@ -759,7 +759,7 @@ EOF
       imageName: ${relay_image_name}
 EOF
                   if [ -n "${relay_commit}" ]; then
-                    echo "      snapshot: snapshots/${relay_commit}.zip" >> "${worker_selected}"
+                    echo "      snapshot: snapshots/${relay_commit}.zip" >> "${worker_ignored}"
                   fi
                   cat >> "${worker_ignored}" <<EOF
     dialerRouter:
@@ -767,7 +767,7 @@ EOF
       imageName: ${dialer_router_image_name}
 EOF
                   if [ -n "${dialer_router_commit}" ]; then
-                    echo "      snapshot: snapshots/${dialer_router_commit}.zip" >> "${worker_selected}"
+                    echo "      snapshot: snapshots/${dialer_router_commit}.zip" >> "${worker_ignored}"
                   fi
                   cat >> "${worker_ignored}" <<EOF
     listenerRouter:
@@ -775,7 +775,7 @@ EOF
       imageName: ${listener_router_image_name}
 EOF
                   if [ -n "${listener_router_commit}" ]; then
-                    echo "      snapshot: snapshots/${listener_router_commit}.zip" >> "${worker_selected}"
+                    echo "      snapshot: snapshots/${listener_router_commit}.zip" >> "${worker_ignored}"
                   fi
                 fi
 
@@ -939,7 +939,7 @@ EOF
       imageName: ${relay_image_name}
 EOF
                       if [ -n "${relay_commit}" ]; then
-                        echo "      snapshot: snapshots/${relay_commit}.zip" >> "${worker_selected}"
+                        echo "      snapshot: snapshots/${relay_commit}.zip" >> "${worker_ignored}"
                       fi
                       cat >> "${worker_ignored}" <<EOF
     dialerRouter:
@@ -947,7 +947,7 @@ EOF
       imageName: ${dialer_router_image_name}
 EOF
                       if [ -n "${dialer_router_commit}" ]; then
-                        echo "      snapshot: snapshots/${dialer_router_commit}.zip" >> "${worker_selected}"
+                        echo "      snapshot: snapshots/${dialer_router_commit}.zip" >> "${worker_ignored}"
                       fi
                       cat >> "${worker_ignored}" <<EOF
     listenerRouter:
@@ -955,7 +955,7 @@ EOF
       imageName: ${listener_router_image_name}
 EOF
                       if [ -n "${listener_router_commit}" ]; then
-                        echo "      snapshot: snapshots/${listener_router_commit}.zip" >> "${worker_selected}"
+                        echo "      snapshot: snapshots/${listener_router_commit}.zip" >> "${worker_ignored}"
                       fi
                     fi
                   done
