@@ -45,8 +45,9 @@ implementations:
 
   - id: nim-v1.15
     source:
-      type: local
-      path: /Users/radoslawkaminski/src/ift/nim-libp2p
+      type: github
+      repo: vacp2p/nim-libp2p
+      commit: dcc37ca05fc95e25f3c8de9062d2afd241252ca8
       dockerfile: interop/hole-punching/Dockerfile
     transports: [tcp]
     secureChannels: [noise]
