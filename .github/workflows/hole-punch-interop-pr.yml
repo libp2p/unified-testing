@@ -76,7 +76,7 @@ concurrency:
 
 jobs:
   resolve-parameters:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, ephemeral]
     outputs:
       test-select: ${{ steps.resolve.outputs.test-select }}
       test-ignore: ${{ steps.resolve.outputs.test-ignore }}
@@ -170,7 +170,7 @@ jobs:
   run-tests:
     needs: resolve-parameters
     if: needs.resolve-parameters.outputs.should-run-tests == 'true'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, ephemeral]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -185,7 +185,7 @@ jobs:
           router-select: '${{ needs.resolve-parameters.outputs.router-select }}'
           router-ignore: '${{ needs.resolve-parameters.outputs.router-ignore }}'
           transport-ignore: '${{ needs.resolve-parameters.outputs.transport-ignore }}'
-          cache-dir: ${{ runner.temp }}/cache
+          cache-dir: /srv/cache
           snapshot: ${{ needs.resolve-parameters.outputs.snapshot }}
           export-docker-images: ${{ needs.resolve-parameters.outputs.export-docker-images }}
           force-matrix-rebuild: ${{ needs.resolve-parameters.outputs.force-matrix-rebuild }}
