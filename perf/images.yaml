@@ -9,7 +9,7 @@ test-aliases:
   - alias: "none"
     value: "!~all"
   - alias: "images"
-    value: "dotnet-v1.0|go-v0.45|js-v3.x|rust-v0.56"
+    value: "dotnet-v1.0|go-v0.45|js-v3.x|rust-v0.56|lua-v0.1.0"
   - alias: "baselines"
     value: "https|quic-go|iperf|quinn|tquic|tokio-quiche|tokio-tquic|quiche"
   - alias: "default_baselines"
@@ -22,6 +22,8 @@ test-aliases:
     value: "js-v3.x"
   - alias: "dotnet"
     value: "dotnet-v1.0"
+  - alias: "lua"
+    value: "lua-v0.1.0"
   - alias: "failing" # As of 26 Feb 2026
     value: "go-v0.45 x js-v3.x (webtransport)|js-v3.x x go-v0.45 (webtransport)|js-v3.x x js-v3.x (webtransport)|js-v3.x x dotnet-v1.0 (tcp, tls, yamux)|rust-v0.56 x dotnet-v1.0 (tcp, tls, yamux)|dotnet-v1.0 x go-v0.45 (tcp, noise, yamux)|dotnet-v1.0 x go-v0.45 (tcp, tls, yamux)|dotnet-v1.0 x go-v0.45 (quic-v1)|dotnet-v1.0 x rust-v0.56 (tcp, noise, yamux)|dotnet-v1.0 x rust-v0.56 (tcp, tls, yamux)|dotnet-v1.0 x rust-v0.56 (quic-v1)|dotnet-v1.0 x js-v3.x (tcp, noise, yamux)|dotnet-v1.0 x js-v3.x (tcp, tls, yamux)|dotnet-v1.0 x dotnet-v1.0 (quic-v1)"
 
@@ -150,3 +152,13 @@ implementations:
     secureChannels: [noise, tls]
     muxers: [yamux]
 
+  - id: lua-v0.1.0
+    source:
+      type: github
+      repo: dozyio/lua-libp2p
+      commit: b7245527b95f547055f5842a9c1df2d5915d560f
+      dockerfile: interop/perf/Dockerfile
+      requiresSubmodules: true
+    transports: [tcp]
+    secureChannels: [noise]
+    muxers: [yamux]
