@@ -3,7 +3,7 @@ description: "Detect which implementations/relays/routers have changed in images
 
 inputs:
   test-type:
-    description: "Type of test (transport, hole-punch, or perf)"
+    description: "Type of test (transport, hole-punch, perf, or misc)"
     required: true
   base-ref:
     description: "Base branch to compare against"
@@ -55,8 +55,11 @@ runs:
         elif [ "$TEST_TYPE" = "perf" ]; then
           IMPLS_FILE="perf/images.yaml"
           IMAGES_DIR="perf/images"
+        elif [ "$TEST_TYPE" = "misc" ]; then
+          IMPLS_FILE="misc/images.yaml"
+          IMAGES_DIR="misc/images"
         else
-          echo "Error: Invalid test-type. Must be 'transport', 'hole-punch', or 'perf'"
+          echo "Error: Invalid test-type. Must be 'transport', 'hole-punch', 'perf', or 'misc'"
           exit 1
         fi
 
@@ -201,6 +204,8 @@ runs:
                   FULL_SOURCE_PATH="hole-punch/$SOURCE_PATH"
                 elif [ "$TEST_TYPE" = "perf" ]; then
                   FULL_SOURCE_PATH="perf/$SOURCE_PATH"
+                elif [ "$TEST_TYPE" = "misc" ]; then
+                  FULL_SOURCE_PATH="misc/$SOURCE_PATH"
                 fi
 
                 # Check if changed file is within this source path

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Common test matrix caching functions
-# Used by both hole-punch and transport test generation
+# Used by transport, hole-punch, perf, and misc test generation
 
 # Source formatting library if not already loaded
 if ! type print_message &>/dev/null; then

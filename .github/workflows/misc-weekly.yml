@@ -1,0 +1,232 @@
+name: Misc Protocol Interoperability Tests (Weekly)
+
+on:
+  schedule:
+    - cron: '0 2 * * 0'  # 2 AM UTC every Sunday
+  workflow_dispatch:
+    inputs:
+      test-select:
+        description: 'Select specific tests (pipe-separated substrings, e.g. "js|rust")'
+        required: false
+        default: ''
+        type: string
+      test-ignore:
+        description: 'Ignore specific tests (pipe-separated substrings)'
+        required: false
+        default: '~failing'
+        type: string
+      protocol-select:
+        description: 'Select specific protocols to test (pipe-separated, e.g. "ping|echo")'
+        required: false
+        default: ''
+        type: string
+      protocol-ignore:
+        description: 'Ignore specific protocols (pipe-separated substrings)'
+        required: false
+        default: ''
+        type: string
+      force-matrix-rebuild:
+        description: 'Force test matrix regeneration (bypass cache)'
+        required: false
+        default: false
+        type: boolean
+      force-image-rebuild:
+        description: 'Force Docker image rebuilds (bypass cache)'
+        required: false
+        default: false
+        type: boolean
+      debug:
+        description: 'Enable debug mode (sets DEBUG=true in test containers)'
+        required: false
+        default: false
+        type: boolean
+      snapshot:
+        description: 'Create and upload test snapshot for debugging'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  resolve-parameters:
+    runs-on: [self-hosted, linux, x64, ephemeral]
+    outputs:
+      test-select: ${{ steps.resolve.outputs.test-select }}
+      test-ignore: ${{ steps.resolve.outputs.test-ignore }}
+      protocol-select: ${{ steps.resolve.outputs.protocol-select }}
+      protocol-ignore: ${{ steps.resolve.outputs.protocol-ignore }}
+      force-matrix-rebuild: ${{ steps.resolve.outputs.force-matrix-rebuild }}
+      force-image-rebuild: ${{ steps.resolve.outputs.force-image-rebuild }}
+      debug: ${{ steps.resolve.outputs.debug }}
+      snapshot: ${{ steps.resolve.outputs.snapshot }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Resolve parameters
+        id: resolve
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual trigger - use workflow inputs
+            echo "test-select=${{ github.event.inputs.test-select }}" >> $GITHUB_OUTPUT
+            echo "test-ignore=${{ github.event.inputs.test-ignore }}" >> $GITHUB_OUTPUT
+            echo "protocol-select=${{ github.event.inputs.protocol-select }}" >> $GITHUB_OUTPUT
+            echo "protocol-ignore=${{ github.event.inputs.protocol-ignore }}" >> $GITHUB_OUTPUT
+            echo "force-matrix-rebuild=${{ github.event.inputs.force-matrix-rebuild }}" >> $GITHUB_OUTPUT
+            echo "force-image-rebuild=${{ github.event.inputs.force-image-rebuild }}" >> $GITHUB_OUTPUT
+            echo "debug=${{ github.event.inputs.debug }}" >> $GITHUB_OUTPUT
+            echo "snapshot=${{ github.event.inputs.snapshot }}" >> $GITHUB_OUTPUT
+            echo "→ Manual trigger: using workflow inputs"
+          else
+            # Scheduled trigger - run all tests, skip known-failing
+            echo "test-select=" >> $GITHUB_OUTPUT
+            echo "test-ignore=~failing" >> $GITHUB_OUTPUT
+            echo "protocol-select=" >> $GITHUB_OUTPUT
+            echo "protocol-ignore=~failing" >> $GITHUB_OUTPUT
+            echo "force-matrix-rebuild=false" >> $GITHUB_OUTPUT
+            echo "force-image-rebuild=false" >> $GITHUB_OUTPUT
+            echo "debug=false" >> $GITHUB_OUTPUT
+            echo "snapshot=true" >> $GITHUB_OUTPUT
+            echo "→ Scheduled trigger: running full misc protocol interop suite"
+          fi
+
+  run-misc-tests:
+    needs: resolve-parameters
+    runs-on: [self-hosted, linux, x64, ephemeral]
+    # Non-gating: always runs, does not block PRs
+    continue-on-error: true
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install ssh and scp
+        shell: bash
+        run: |
+          apt-get update -qq && apt-get install -y openssh-client
+
+      - name: Run misc protocol interop tests
+        uses: ./.github/actions/run-bash-misc-test
+        with:
+          test-select: '${{ needs.resolve-parameters.outputs.test-select }}'
+          test-ignore: '${{ needs.resolve-parameters.outputs.test-ignore }}'
+          protocol-select: '${{ needs.resolve-parameters.outputs.protocol-select }}'
+          protocol-ignore: '${{ needs.resolve-parameters.outputs.protocol-ignore }}'
+          cache-dir: /srv/cache
+          snapshot: ${{ needs.resolve-parameters.outputs.snapshot }}
+          force-matrix-rebuild: ${{ needs.resolve-parameters.outputs.force-matrix-rebuild }}
+          force-image-rebuild: ${{ needs.resolve-parameters.outputs.force-image-rebuild }}
+          debug: ${{ needs.resolve-parameters.outputs.debug }}
+
+  commit-results:
+    needs: run-misc-tests
+    if: always() && needs.run-misc-tests.result != 'skipped'
+    runs-on: [self-hosted, linux, x64, ephemeral]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Download misc test results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: misc-test-results-*
+          path: /tmp/misc-results
+          merge-multiple: true
+
+      - name: Find results file
+        id: find-results
+        shell: bash
+        run: |
+          RESULTS_FILE=""
+          if [ -d /tmp/misc-results ]; then
+            if [ -f /tmp/misc-results/results.yaml ]; then
+              RESULTS_FILE="/tmp/misc-results/results.yaml"
+            else
+              RESULTS_FILE=$(find /tmp/misc-results -name "results.yaml" | head -1)
+            fi
+          fi
+
+          if [ -z "$RESULTS_FILE" ] || [ ! -f "$RESULTS_FILE" ]; then
+            echo "Warning: No results.yaml found, skipping commit"
+            echo "has-results=false" >> $GITHUB_OUTPUT
+          else
+            echo "results-file=$RESULTS_FILE" >> $GITHUB_OUTPUT
+            echo "has-results=true" >> $GITHUB_OUTPUT
+            echo "→ Results file: $RESULTS_FILE"
+          fi
+
+      - name: Copy results to repository
+        if: steps.find-results.outputs.has-results == 'true'
+        shell: bash
+        run: |
+          mkdir -p results
+          cp "${{ steps.find-results.outputs.results-file }}" results/misc-weekly.yml
+          echo "→ Copied results to results/misc-weekly.yml"
+          head -50 results/misc-weekly.yml
+
+      - name: Commit and push results
+        if: steps.find-results.outputs.has-results == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add results/misc-weekly.yml
+
+          if git diff --cached --quiet 2>/dev/null; then
+            echo "→ No changes to commit"
+            exit 0
+          fi
+
+          git commit -m "chore: update misc protocol interop results [skip ci]" \
+                     -m "Weekly misc protocol interoperability test results (ping, echo, identify)." \
+                     -m "Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+                     -m "Co-authored-by: github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+
+          echo "→ Commit created"
+
+          # Push with retry logic
+          MAX_ATTEMPTS=5
+          ATTEMPT=1
+
+          while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+            echo "→ Push attempt $ATTEMPT/$MAX_ATTEMPTS"
+
+            if git push origin master; then
+              echo "✓ Misc weekly results committed and pushed successfully"
+              exit 0
+            else
+              echo "✗ Push failed (attempt $ATTEMPT/$MAX_ATTEMPTS)"
+
+              if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+                echo "✗ Failed to push after $MAX_ATTEMPTS attempts"
+                exit 1
+              fi
+
+              echo "→ Pulling latest changes and rebasing..."
+              git fetch origin master
+              if git rebase origin/master; then
+                echo "✓ Rebase successful"
+              else
+                echo "✗ Rebase conflict, resolving with ours..."
+                git checkout --ours results/misc-weekly.yml 2>/dev/null || true
+                git add results/misc-weekly.yml
+                git rebase --continue || {
+                  echo "✗ Failed to resolve rebase conflict"
+                  git rebase --abort
+                  exit 1
+                }
+                echo "✓ Rebase conflict resolved"
+              fi
+
+              SLEEP_TIME=$((5 * (2 ** ($ATTEMPT - 1))))
+              echo "→ Waiting ${SLEEP_TIME}s before retry..."
+              sleep $SLEEP_TIME
+
+              ATTEMPT=$((ATTEMPT + 1))
+            fi
+          done
