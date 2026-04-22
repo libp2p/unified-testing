@@ -4,6 +4,8 @@
 # Test Aliases - Define reusable patterns for test selection
 # Usage: --test-select "~linux" or --test-ignore "!~linux"
 test-aliases:
+  - alias: "nim"
+    value: "nim-v1.15"
   - alias: "failing"
     value: "rust-v0.56 x rust-v0.56"
 
@@ -39,4 +41,14 @@ implementations:
     # Fixed upstream in webrtc-rs/webrtc#677. Re-enable when rust-libp2p cuts a new release with the fix.
     transports: [quic-v1, tcp, ws]
     secureChannels: [noise, tls]
+    muxers: [yamux, mplex]
+
+  - id: nim-v1.15
+    source:
+      type: github
+      repo: vacp2p/nim-libp2p
+      commit: 39902922cf718768a18fbe07482d8ccb0a2dc351
+      dockerfile: interop/hole-punching/Dockerfile
+    transports: [tcp]
+    secureChannels: [noise]
     muxers: [yamux, mplex]
