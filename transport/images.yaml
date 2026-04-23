@@ -5,7 +5,7 @@
 # Usage: --test-select "~browsers" or --test-ignore "!~browsers"
 test-aliases:
   - alias: "all"
-    value: "~browsers|~rust|~go|~python|~js|~nim|~jvm|~c|~dotnet|~zig|~eth-p2p"
+    value: "~browsers|~rust|~go|~python|~js|~nim|~jvm|~c|~dotnet|~zig|~eth-p2p|~lua"
   - alias: "browsers"
     value: "chromium-rust-v0.53|chromium-rust-v0.54|chromium-rust-v0.56|chromium-js-v1.x|chromium-js-v2.x|firefox-js-v1.x|firefox-js-v2.x|webkit-js-v1.x|webkit-js-v2.x"
   - alias: "rust-browsers"
@@ -32,8 +32,10 @@ test-aliases:
     value: "zig-v0.0.1"
   - alias: "eth-p2p"
     value: "eth-p2p-z-v0.0.1"
+  - alias: "lua"
+    value: "lua-v0.1.0"
   - alias: "failing" # everything except rust-v0.56 and js and python-v0.x implementations as of 25 Jan 2026
-    value: "~browsers|go-v0.38|go-v0.39|go-v0.40|go-v0.41|go-v0.42|go-v0.43|go-v0.44|go-v0.45|nim-v1.14|~jvm|~c|~dotnet|~zig|~eth-p2p|rust-v0.53|rust-v0.54|rust-v0.55"
+    value: "~browsers|go-v0.38|go-v0.39|go-v0.40|go-v0.41|go-v0.42|go-v0.43|go-v0.44|go-v0.45|~nim-v1.14|~jvm|~c|~dotnet|~zig|~eth-p2p|rust-v0.53|rust-v0.54|rust-v0.55|lua-v0.1.0 x python-v0.x"
 
 implementations:
   # Rust implementations
@@ -190,12 +192,24 @@ implementations:
     source:
       type: github
       repo: libp2p/py-libp2p
-      #commit: 22ea173ac0359a386275bdf6b846bc52a0082e91 
-      commit: e4cb3f8c0c758420f9bdd6a195529b22f14ab765 
+      #commit: 22ea173ac0359a386275bdf6b846bc52a0082e91
+      commit: e4cb3f8c0c758420f9bdd6a195529b22f14ab765
       dockerfile: interop/transport/Dockerfile
     transports: [tcp, ws, wss, quic-v1]
     secureChannels: [tls, noise]
     muxers: [mplex, yamux]
+
+  # Lua implementation
+  - id: lua-v0.1.0
+    source:
+      type: github
+      repo: dozyio/lua-libp2p
+      commit: 4155c6d59779bdb48de4579d7d97387312113487
+      dockerfile: interop/transport/Dockerfile
+      requiresSubmodules: true
+    transports: [tcp]
+    secureChannels: [noise]
+    muxers: [yamux]
 
   # JavaScript implementations (Node.js)
   - id: js-v1.x
@@ -417,4 +431,3 @@ implementations:
     muxers: [mplex, yamux]
     dialOnly: [webtransport, ws]
     legacy: true
-
