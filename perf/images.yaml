@@ -169,7 +169,7 @@ implementations:
     source:
       type: github
       repo: vacp2p/nim-libp2p
-      commit: 002f2a944faaf927752591f69211c57a17101611
+      commit: cf84cb00c712c37cf5c3ed9e17608a1d5a30b0f1
       dockerfile: interop/perf/Dockerfile
     transports: [tcp, quic-v1, ws]
     secureChannels: [noise]
