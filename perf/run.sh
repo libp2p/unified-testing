@@ -172,6 +172,7 @@ Configuration Options:
   --cache-dir VALUE             Cache directory (default: /srv/cache)
 
 Execution Options:
+  --full-matrix-test            Test all dialer x listener combinations (default: self-tests only)
   --snapshot                    Create test pass snapshot after completion
   --export-docker-images        Export Docker images when creating snapshot
   --debug                       Enable debug mode
@@ -260,6 +261,7 @@ while [ $# -gt 0 ]; do
     --cache-dir) CACHE_DIR="${2}"; shift 2 ;;
 
     # Execution options
+    --full-matrix-test) FULL_MATRIX_TEST=true; shift ;;
     --snapshot) CREATE_SNAPSHOT=true; shift ;;
     --export-docker-images) EXPORT_DOCKER_IMAGES=true; shift ;;
     --debug) DEBUG=true; shift ;;
@@ -305,6 +307,7 @@ export TEST_RUN_KEY=$(compute_test_run_key \
   "${TEST_SELECT}" \
   "${TEST_IGNORE}" \
   "${DEBUG}" \
+  "${FULL_MATRIX_TEST}" \
 )
 export TEST_PASS_NAME="${TEST_TYPE}-${TEST_RUN_KEY}-$(date +%H%M%S-%d-%m-%Y)"
 export TEST_PASS_DIR="${TEST_RUN_DIR}/${TEST_PASS_NAME}"
@@ -479,6 +482,7 @@ print_message "Download Bytes: $(numfmt --to=iec --suffix=B "${DOWNLOAD_BYTES}" 
 print_message "Iterations: ${ITERATIONS}"
 print_message "Duration per Iteration: ${DURATION_PER_ITERATION}s"
 print_message "Latency Iterations: ${LATENCY_ITERATIONS}"
+print_message "Full Matrix Test: ${FULL_MATRIX_TEST}"
 print_message "Create Snapshot: ${CREATE_SNAPSHOT}"
 print_message "Export Docker Images: ${EXPORT_DOCKER_IMAGES}"
 print_message "Debug: ${DEBUG}"

@@ -49,9 +49,16 @@ TEST_SLUG=$(echo "${TEST_NAME}" | sed 's/[^a-zA-Z0-9-]/_/g')
 LOG_FILE="${TEST_PASS_DIR}/logs/${TEST_SLUG}.log"
 >> "${LOG_FILE}"
 
+# Use unique compose project/container names per test pass to avoid stale
+# docker compose state collisions when rerunning the same test selection.
+RUN_KEY=$(compute_test_key "${TEST_PASS_NAME}-${TEST_NAME}")
+COMPOSE_PROJECT_NAME="${TEST_SLUG}_${RUN_KEY}"
+CONTAINER_PREFIX="${COMPOSE_PROJECT_NAME}"
+
 print_debug "test key: ${TEST_KEY}"
 print_debug "test slug: ${TEST_SLUG}"
 print_debug "log file: ${LOG_FILE}"
+print_debug "compose project: ${COMPOSE_PROJECT_NAME}"
 
 log_message "[$((${TEST_INDEX} + 1))] ${TEST_NAME} (key: ${TEST_KEY})"
 
@@ -97,7 +104,7 @@ if [ "${IS_LEGACY_TEST}" == "true" ]; then
   # Legacy test: external shared network + Redis proxy service
   # The proxy translates legacy key names to modern format and forwards to global Redis
   cat > "${COMPOSE_FILE}" <<EOF
-name: ${TEST_SLUG}
+name: ${COMPOSE_PROJECT_NAME}
 
 networks:
   default:
@@ -110,7 +117,7 @@ networks:
 services:
   proxy-${TEST_KEY}:
     image: libp2p-redis-proxy
-    container_name: ${TEST_SLUG}_proxy
+    container_name: ${CONTAINER_PREFIX}_proxy
     networks:
       - transport-network
     environment:
@@ -119,7 +126,7 @@ services:
 
   listener:
     image: "${LISTENER_IMAGE}"
-    container_name: ${TEST_SLUG}_listener
+    container_name: ${CONTAINER_PREFIX}_listener
     init: true
     depends_on:
       - proxy-${TEST_KEY}
@@ -130,7 +137,7 @@ ${LISTENER_ENV}
 
   dialer:
     image: "${DIALER_IMAGE}"
-    container_name: ${TEST_SLUG}_dialer
+    container_name: ${CONTAINER_PREFIX}_dialer
     init: true
     depends_on:
       - listener
@@ -143,7 +150,7 @@ EOF
 else
   # Modern test: external shared network, no proxy needed
   cat > "${COMPOSE_FILE}" <<EOF
-name: ${TEST_SLUG}
+name: ${COMPOSE_PROJECT_NAME}
 
 networks:
   default:
@@ -156,7 +163,7 @@ networks:
 services:
   listener:
     image: "${LISTENER_IMAGE}"
-    container_name: ${TEST_SLUG}_listener
+    container_name: ${CONTAINER_PREFIX}_listener
     init: true
     networks:
       - transport-network
@@ -165,7 +172,7 @@ ${LISTENER_ENV}
 
   dialer:
     image: "${DIALER_IMAGE}"
-    container_name: ${TEST_SLUG}_dialer
+    container_name: ${CONTAINER_PREFIX}_dialer
     init: true
     depends_on:
       - listener

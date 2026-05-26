@@ -342,6 +342,11 @@ for dialer_id in "${all_baseline_ids[@]}"; do
   dialer_transports="${baseline_transports[${dialer_id}]}"
 
   for listener_id in "${all_baseline_ids[@]}"; do
+    # In self-test mode (default), skip cross-implementation tests
+    if [ "${FULL_MATRIX_TEST}" != "true" ] && [ "${listener_id}" != "${dialer_id}" ]; then
+      continue
+    fi
+
     # Check if BOTH dialer AND listener are in filtered baseline list
     test_is_selected=false
     if [[ " ${filtered_baseline_ids[*]} " =~ " ${dialer_id} " ]] && [[ " ${filtered_baseline_ids[*]} " =~ " ${listener_id} " ]]; then
@@ -416,6 +421,11 @@ for dialer_id in "${all_image_ids[@]}"; do
   fi
 
   for listener_id in "${all_image_ids[@]}"; do
+    # In self-test mode (default), skip cross-implementation tests
+    if [ "${FULL_MATRIX_TEST}" != "true" ] && [ "${listener_id}" != "${dialer_id}" ]; then
+      continue
+    fi
+
     listener_transports="${image_transports[${listener_id}]}"
     listener_secure="${image_secure[${listener_id}]}"
     listener_muxers="${image_muxers[${listener_id}]}"
@@ -650,6 +660,7 @@ metadata:
   ignoredBaselines: ${#ignored_baseline_tests[@]}
   totalTests: ${#main_tests[@]}
   ignoredTests: ${#ignored_main_tests[@]}
+  fullMatrixTest: ${FULL_MATRIX_TEST}
   debug: ${DEBUG}
 EOF
 

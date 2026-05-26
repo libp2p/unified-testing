@@ -1,0 +1,15 @@
+[package]
+name = "perf-tokio-tquic"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio-tquic = { git = "https://github.com/cryptidtech/tokio-tquic" }
+tokio = { version = "1", features = ["full"] }
+rcgen = "0.13"
+redis = { version = "0.27", features = ["tokio-comp"] }
+tempfile = "3"
+
+[profile.release]
+opt-level = 3
+lto = true

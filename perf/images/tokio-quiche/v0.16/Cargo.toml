@@ -1,0 +1,17 @@
+[package]
+name = "perf-tokio-quiche"
+version = "0.16.0"
+edition = "2021"
+
+[dependencies]
+tokio-quiche = "0.16"
+quiche = "0.26"
+tokio = { version = "1", features = ["full"] }
+tokio-stream = "0.1"
+rcgen = "0.13"
+redis = { version = "0.27", features = ["tokio-comp"] }
+tempfile = "3"
+
+[profile.release]
+opt-level = 3
+lto = true

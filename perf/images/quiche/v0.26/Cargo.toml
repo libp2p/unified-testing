@@ -1,0 +1,17 @@
+[package]
+name = "perf-quiche"
+version = "0.26.0"
+edition = "2021"
+
+[dependencies]
+quiche = "0.26"
+mio = { version = "1", features = ["net", "os-poll"] }
+tokio = { version = "1", features = ["rt", "net", "time", "macros"] }
+rcgen = "0.13"
+redis = { version = "0.27", features = ["tokio-comp"] }
+tempfile = "3"
+ring = "0.17"
+
+[profile.release]
+opt-level = 3
+lto = true

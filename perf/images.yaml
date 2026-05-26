@@ -9,11 +9,13 @@ test-aliases:
   - alias: "none"
     value: "!~all"
   - alias: "images"
-    value: "dotnet-v1.0|go-v0.45|js-v3.x|python-v0.x|rust-v0.56"
+    value: "dotnet-v1.0|go-v0.45|js-v3.x|python-v0.x|rust-v0.56|lua-v0.1.0"
   - alias: "python"
     value: "python-v0.x"
   - alias: "baselines"
-    value: "https|quic-go|iperf"
+    value: "https|quic-go|iperf|quinn|tquic|tokio-quiche|tokio-tquic|quiche"
+  - alias: "default_baselines"
+    value: "https|quic-go|iperf|quinn"
   - alias: "go"
     value: "go-v0.45"
   - alias: "rust"
@@ -22,6 +24,8 @@ test-aliases:
     value: "js-v3.x"
   - alias: "dotnet"
     value: "dotnet-v1.0"
+  - alias: "lua"
+    value: "lua-v0.1.0"
   - alias: "failing" # As of 26 Feb 2026
     value: "go-v0.45 x js-v3.x (webtransport)|js-v3.x x go-v0.45 (webtransport)|js-v3.x x js-v3.x (webtransport)|js-v3.x x dotnet-v1.0 (tcp, tls, yamux)|rust-v0.56 x dotnet-v1.0 (tcp, tls, yamux)|dotnet-v1.0 x go-v0.45 (tcp, noise, yamux)|dotnet-v1.0 x go-v0.45 (tcp, tls, yamux)|dotnet-v1.0 x go-v0.45 (quic-v1)|dotnet-v1.0 x rust-v0.56 (tcp, noise, yamux)|dotnet-v1.0 x rust-v0.56 (tcp, tls, yamux)|dotnet-v1.0 x rust-v0.56 (quic-v1)|dotnet-v1.0 x js-v3.x (tcp, noise, yamux)|dotnet-v1.0 x js-v3.x (tcp, tls, yamux)|dotnet-v1.0 x dotnet-v1.0 (quic-v1)"
 
@@ -56,6 +60,56 @@ baselines:
       path: images/iperf/v3.0
       dockerfile: Dockerfile
     transports: [tcp]
+    secureChannels: []
+    muxers: []
+
+  # Quinn baseline (Rust QUIC)
+  - id: quinn
+    source:
+      type: local
+      path: images/quinn/v0.11
+      dockerfile: Dockerfile
+    transports: [quic]
+    secureChannels: []
+    muxers: []
+
+  # TQUIC baseline (Rust QUIC)
+  - id: tquic
+    source:
+      type: local
+      path: images/tquic/v1.6
+      dockerfile: Dockerfile
+    transports: [quic]
+    secureChannels: []
+    muxers: []
+
+  # tokio-quiche baseline (Rust QUIC)
+  - id: tokio-quiche
+    source:
+      type: local
+      path: images/tokio-quiche/v0.16
+      dockerfile: Dockerfile
+    transports: [quic]
+    secureChannels: []
+    muxers: []
+
+  # tokio-tquic baseline (Rust QUIC - async tquic wrapper)
+  - id: tokio-tquic
+    source:
+      type: local
+      path: images/tokio-tquic/v0.1
+      dockerfile: Dockerfile
+    transports: [quic]
+    secureChannels: []
+    muxers: []
+
+  # quiche baseline (Rust QUIC - raw quiche)
+  - id: quiche
+    source:
+      type: local
+      path: images/quiche/v0.26
+      dockerfile: Dockerfile
+    transports: [quic]
     secureChannels: []
     muxers: []
 
@@ -116,7 +170,18 @@ implementations:
   #    type: local
   #    path: images/python/0.x/py-libp2p
   #    dockerfile: interop/perf/Dockerfile
-    # transports: [quic-v1, tcp, ws]
+  #    # transports: [quic-v1, tcp, ws]
   #  transports: [tcp, ws]
   #  secureChannels: [noise, tls]
   #  muxers: [yamux, mplex]
+
+  - id: lua-v0.1.0
+    source:
+      type: github
+      repo: dozyio/lua-libp2p
+      commit: b7245527b95f547055f5842a9c1df2d5915d560f
+      dockerfile: interop/perf/Dockerfile
+      requiresSubmodules: true
+    transports: [tcp]
+    secureChannels: [noise]
+    muxers: [yamux]
