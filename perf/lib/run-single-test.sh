@@ -96,13 +96,55 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Build environment variables per container based on legacy status
-# Legacy containers get lowercase env vars pointing to the proxy
-# Modern containers get uppercase env vars pointing to global Redis
+# Build environment variables per container based on legacy status.
+# Legacy containers get lowercase env vars pointing to the proxy.
+# Modern containers get uppercase env vars pointing to global Redis.
+
+# Python-only yamux tuning: forward host PY_YAMUX_* into python-v0.x containers only.
+# Read by py-libp2p yamux; ignored by Go/Rust/JS. DEBUG=true sets PY_YAMUX_DEBUG=1.
+LISTENER_PY_ENV=()
+if [[ "${LISTENER_ID}" == "python-v0.x" ]]; then
+  if [ "${DEBUG:-false}" = "true" ]; then
+    LISTENER_PY_ENV+=("PY_YAMUX_DEBUG=1")
+  fi
+  if [ -n "${PY_YAMUX_DISABLE_HYSTERESIS:-}" ]; then
+    LISTENER_PY_ENV+=("PY_YAMUX_DISABLE_HYSTERESIS=${PY_YAMUX_DISABLE_HYSTERESIS}")
+  fi
+  if [ -n "${PY_YAMUX_RELEASE_ON_READ:-}" ]; then
+    LISTENER_PY_ENV+=("PY_YAMUX_RELEASE_ON_READ=${PY_YAMUX_RELEASE_ON_READ}")
+  fi
+  if [ -n "${PY_YAMUX_ASSUME_RTT_MS:-}" ]; then
+    LISTENER_PY_ENV+=("PY_YAMUX_ASSUME_RTT_MS=${PY_YAMUX_ASSUME_RTT_MS}")
+  fi
+  if [ -n "${PY_YAMUX_BATCH_THRESHOLD_DIV:-}" ]; then
+    LISTENER_PY_ENV+=("PY_YAMUX_BATCH_THRESHOLD_DIV=${PY_YAMUX_BATCH_THRESHOLD_DIV}")
+  fi
+fi
+
+DIALER_PY_ENV=()
+if [[ "${DIALER_ID}" == "python-v0.x" ]]; then
+  if [ "${DEBUG:-false}" = "true" ]; then
+    DIALER_PY_ENV+=("PY_YAMUX_DEBUG=1")
+  fi
+  if [ -n "${PY_YAMUX_DISABLE_HYSTERESIS:-}" ]; then
+    DIALER_PY_ENV+=("PY_YAMUX_DISABLE_HYSTERESIS=${PY_YAMUX_DISABLE_HYSTERESIS}")
+  fi
+  if [ -n "${PY_YAMUX_RELEASE_ON_READ:-}" ]; then
+    DIALER_PY_ENV+=("PY_YAMUX_RELEASE_ON_READ=${PY_YAMUX_RELEASE_ON_READ}")
+  fi
+  if [ -n "${PY_YAMUX_ASSUME_RTT_MS:-}" ]; then
+    DIALER_PY_ENV+=("PY_YAMUX_ASSUME_RTT_MS=${PY_YAMUX_ASSUME_RTT_MS}")
+  fi
+  if [ -n "${PY_YAMUX_BATCH_THRESHOLD_DIV:-}" ]; then
+    DIALER_PY_ENV+=("PY_YAMUX_BATCH_THRESHOLD_DIV=${PY_YAMUX_BATCH_THRESHOLD_DIV}")
+  fi
+fi
+
 if [ "${LISTENER_LEGACY}" == "true" ]; then
   LISTENER_ENV=$(generate_legacy_env_vars "false" "proxy-${TEST_KEY}:6379" "${TRANSPORT_NAME}" "${SECURE}" "${MUXER_NAME}")
 else
-  LISTENER_ENV=$(generate_modern_env_vars "false" "perf-redis:6379" "${TEST_KEY}" "${TRANSPORT_NAME}" "${SECURE}" "${MUXER_NAME}" "${DEBUG:-false}")
+  LISTENER_ENV=$(generate_modern_env_vars "false" "perf-redis:6379" "${TEST_KEY}" "${TRANSPORT_NAME}" "${SECURE}" "${MUXER_NAME}" "${DEBUG:-false}" \
+    "${LISTENER_PY_ENV[@]}")
 fi
 
 if [ "${DIALER_LEGACY}" == "true" ]; then
@@ -114,7 +156,8 @@ else
     "UPLOAD_ITERATIONS=${upload_iterations}" \
     "DOWNLOAD_ITERATIONS=${download_iterations}" \
     "LATENCY_ITERATIONS=${latency_iterations}" \
-    "DURATION=${duration}")
+    "DURATION=${duration}" \
+    "${DIALER_PY_ENV[@]}")
 fi
 
 # Generate docker-compose file
@@ -202,15 +245,15 @@ fi
 log_debug "  Starting containers..."
 log_message "Running: ${TEST_NAME}"
 
-# Set timeout (300 seconds / 5 minutes)
-TEST_TIMEOUT=300
+# Per-test harness timeout (default 300s). Set via run.sh --timeout:
+#   ./run.sh --timeout 900 --test-select "python-v0" --yes
 
 # Track test duration
 TEST_START=$(date +%s)
 
 # Start containers and wait for dialer to exit (with timeout)
 # WARNING: Do NOT put quotes around this because the command has two parts
-if timeout "${TEST_TIMEOUT}" ${DOCKER_COMPOSE_CMD} -f "${COMPOSE_FILE}" up --exit-code-from dialer --abort-on-container-exit >> "${LOG_FILE}" 2>&1; then
+if timeout "${PERF_TEST_TIMEOUT_SECS:-300}" ${DOCKER_COMPOSE_CMD} -f "${COMPOSE_FILE}" up --exit-code-from dialer --abort-on-container-exit >> "${LOG_FILE}" 2>&1; then
     EXIT_CODE=0
     log_message "  ✓ Test complete"
 else
@@ -218,9 +261,9 @@ else
     # Check if it was a timeout (exit code 124)
     if [ "${TEST_EXIT}" -eq 124 ]; then
         EXIT_CODE=1
-        log_error "  ✗ Test timed out after ${TEST_TIMEOUT}s"
+        log_error "  ✗ Test timed out after ${PERF_TEST_TIMEOUT_SECS:-300}s"
         echo "" >> "${LOG_FILE}"
-        log_error "Test timed out after ${TEST_TIMEOUT} seconds"
+        log_error "Test timed out after ${PERF_TEST_TIMEOUT_SECS:-300} seconds"
     else
         EXIT_CODE="${TEST_EXIT}"
         log_error "  ✗ Test failed (exit code ${TEST_EXIT})"
