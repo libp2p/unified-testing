@@ -31,11 +31,11 @@ test-aliases:
   - alias: "zig"
     value: "zig-v0.0.1"
   - alias: "eth-p2p"
-    value: "eth-p2p-z-v0.0.1"
+    value: "eth-p2p-z-v0.0.1|eth-p2p-z-v0.0.2"
   - alias: "lua"
     value: "lua-v0.1.0"
   - alias: "failing" # everything except rust-v0.56 and js and python-v0.x implementations as of 25 Jan 2026
-    value: "~browsers|go-v0.38|go-v0.39|go-v0.40|go-v0.41|go-v0.42|go-v0.43|go-v0.44|go-v0.45|~nim|~jvm|~c|~dotnet|~zig|~eth-p2p|rust-v0.53|rust-v0.54|rust-v0.55|lua-v0.1.0 x python-v0.x"
+    value: "~browsers|go-v0.38|go-v0.39|go-v0.40|go-v0.41|go-v0.42|go-v0.43|go-v0.44|go-v0.45|~nim|~jvm|~c|~dotnet|~zig|eth-p2p-z-v0.0.1|rust-v0.53|rust-v0.54|rust-v0.55|lua-v0.1.0 x python-v0.x"
 
 implementations:
   # Rust implementations
@@ -314,6 +314,16 @@ implementations:
     secureChannels: []
     muxers: []
     legacy: true
+
+  - id: eth-p2p-z-v0.0.2
+    source:
+      type: github
+      repo: zen-eth/eth-p2p-z
+      commit: 983846e42a4be47500e4c9f9194efa1243f23ba8
+      dockerfile: interop/transport/Dockerfile
+    transports: [quic-v1]
+    secureChannels: []
+    muxers: []
 
   # Browser implementations (require local build)
   # Note: Browser images are built from js implementations
