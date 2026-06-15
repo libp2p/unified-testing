@@ -9,7 +9,11 @@ test-aliases:
   - alias: "none"
     value: "!~all"
   - alias: "images"
+<<<<<<< eth-p2p-z-perf-v0.0.2
     value: "dotnet-v1.0|go-v0.45|js-v3.x|rust-v0.56|lua-v0.1.0|eth-p2p-z-v0.0.2"
+=======
+    value: "dotnet-v1.0|go-v0.45|js-v3.x|rust-v0.56|lua-v0.1.0|nim-v1.15"
+>>>>>>> master
   - alias: "baselines"
     value: "https|quic-go|iperf|quinn|tquic|tokio-quiche|tokio-tquic|quiche"
   - alias: "default_baselines"
@@ -24,8 +28,13 @@ test-aliases:
     value: "dotnet-v1.0"
   - alias: "lua"
     value: "lua-v0.1.0"
+<<<<<<< eth-p2p-z-perf-v0.0.2
   - alias: "eth-p2p"
     value: "eth-p2p-z-v0.0.2"
+=======
+  - alias: "nim"
+    value: "nim-v1.15"
+>>>>>>> master
   - alias: "failing" # As of 26 Feb 2026
     value: "go-v0.45 x js-v3.x (webtransport)|js-v3.x x go-v0.45 (webtransport)|js-v3.x x js-v3.x (webtransport)|js-v3.x x dotnet-v1.0 (tcp, tls, yamux)|rust-v0.56 x dotnet-v1.0 (tcp, tls, yamux)|dotnet-v1.0 x go-v0.45 (tcp, noise, yamux)|dotnet-v1.0 x go-v0.45 (tcp, tls, yamux)|dotnet-v1.0 x go-v0.45 (quic-v1)|dotnet-v1.0 x rust-v0.56 (tcp, noise, yamux)|dotnet-v1.0 x rust-v0.56 (tcp, tls, yamux)|dotnet-v1.0 x rust-v0.56 (quic-v1)|dotnet-v1.0 x js-v3.x (tcp, noise, yamux)|dotnet-v1.0 x js-v3.x (tcp, tls, yamux)|dotnet-v1.0 x dotnet-v1.0 (quic-v1)"
 
@@ -165,6 +174,7 @@ implementations:
     secureChannels: [noise]
     muxers: [yamux]
 
+<<<<<<< eth-p2p-z-perf-v0.0.2
   # Ethereum P2P implementation (Zig-based, quiche QUIC)
   - id: eth-p2p-z-v0.0.2
     source:
@@ -175,3 +185,14 @@ implementations:
     transports: [quic-v1]
     secureChannels: []
     muxers: []
+=======
+  - id: nim-v1.15
+    source:
+      type: github
+      repo: vacp2p/nim-libp2p
+      commit: 1bdf2f67971529e8bee01252230bdb00ab785ef7
+      dockerfile: interop/perf/Dockerfile
+    transports: [tcp, quic-v1, ws]
+    secureChannels: [noise]
+    muxers: [yamux, mplex]
+>>>>>>> master
