@@ -21,7 +21,7 @@ test-aliases:
   - alias: "js"
     value: "js-v1.x|js-v2.x|js-v3.x"
   - alias: "nim"
-    value: "nim-v1.14"
+    value: "nim-v1.15"
   - alias: "jvm"
     value: "jvm-v1.2"
   - alias: "c"
@@ -35,7 +35,7 @@ test-aliases:
   - alias: "lua"
     value: "lua-v0.1.0"
   - alias: "failing" # everything except rust-v0.56 and js and python-v0.x implementations as of 25 Jan 2026
-    value: "~browsers|go-v0.38|go-v0.39|go-v0.40|go-v0.41|go-v0.42|go-v0.43|go-v0.44|go-v0.45|~nim|~jvm|~c|~dotnet|~zig|~eth-p2p|rust-v0.53|rust-v0.54|rust-v0.55|lua-v0.1.0 x python-v0.x"
+    value: "~browsers|go-v0.38|go-v0.39|go-v0.40|go-v0.41|go-v0.42|go-v0.43|go-v0.44|go-v0.45|~jvm|~c|~dotnet|~zig|~eth-p2p|rust-v0.53|rust-v0.54|rust-v0.55|lua-v0.1.0 x python-v0.x"
 
 implementations:
   # Rust implementations
@@ -242,17 +242,16 @@ implementations:
     muxers: [mplex, yamux]
     dialOnly: [wss]
 
-  # Nim implementation
-  - id: nim-v1.14
+  # Nim implementations
+  - id: nim-v1.15
     source:
       type: github
-      repo: status-im/nim-libp2p
-      commit: 0309685cd27d4bf763c8b3be86a76c33bcfe67ea
-      dockerfile: interop/transport/Dockerfile
-    transports: [tcp, ws]
+      repo: vacp2p/nim-libp2p
+      commit: 399c4554f0b6c04049a56207a9448060bfb5221c
+      dockerfile: interop/transport-v2/Dockerfile
+    transports: [tcp, ws, quic-v1]
     secureChannels: [noise]
     muxers: [mplex, yamux]
-    legacy: true
 
   # JVM implementation
   - id: jvm-v1.2
