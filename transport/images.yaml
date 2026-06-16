@@ -319,12 +319,11 @@ implementations:
     source:
       type: github
       repo: zen-eth/eth-p2p-z
-      commit: 983846e42a4be47500e4c9f9194efa1243f23ba8
+      commit: a59973433d15b4f2ed4f394c149766aa739d845f
       dockerfile: interop/transport/Dockerfile
     transports: [quic-v1]
     secureChannels: []
     muxers: []
-    legacy: true
 
   # Browser implementations (require local build)
   # Note: Browser images are built from js implementations
