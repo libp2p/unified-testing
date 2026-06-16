@@ -324,6 +324,7 @@ implementations:
     transports: [quic-v1]
     secureChannels: []
     muxers: []
+    legacy: true
 
   # Browser implementations (require local build)
   # Note: Browser images are built from js implementations
