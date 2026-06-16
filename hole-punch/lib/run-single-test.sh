@@ -107,6 +107,60 @@ print_debug "relay image: ${RELAY_IMAGE}"
 print_debug "dialer router image: ${DIALER_ROUTER_IMAGE}"
 print_debug "listener router image: ${LISTENER_ROUTER_IMAGE}"
 
+# Generate extra devices YAML for OpenBSD routers (QEMU needs /dev/net/tun and /dev/kvm)
+build_router_extra() {
+  local router_id="$1"
+  if [[ "$router_id" == *openbsd* ]]; then
+    local extra="    devices:
+      - /dev/net/tun:/dev/net/tun"
+    if [ -c /dev/kvm ]; then
+      extra="${extra}
+      - /dev/kvm:/dev/kvm"
+    fi
+    echo "$extra"
+  fi
+}
+
+DIALER_ROUTER_EXTRA=$(build_router_extra "${DIALER_ROUTER_ID}")
+LISTENER_ROUTER_EXTRA=$(build_router_extra "${LISTENER_ROUTER_ID}")
+
+# Generate depends_on block for dialer/listener services.
+# When an OpenBSD router is involved, use map format with condition: service_healthy
+# so Docker Compose waits for the VM to fully boot before starting dependents.
+# All entries in a depends_on block must use the same format (map vs list).
+build_depends_on_block() {
+  local router_id="$1"
+  local router_service="$2"
+  shift 2
+  # Remaining args are additional dependencies (service names)
+  local extra_deps=("$@")
+
+  if [[ "$router_id" == *openbsd* ]]; then
+    # Map format: required when any entry uses condition:
+    local block="    depends_on:
+      relay:
+        condition: service_started
+      ${router_service}:
+        condition: service_healthy"
+    for dep in "${extra_deps[@]}"; do
+      block="${block}
+      ${dep}:
+        condition: service_started"
+    done
+    echo "$block"
+  else
+    # List format: simple dependency (container started)
+    local block="    depends_on:
+      - relay
+      - ${router_service}"
+    for dep in "${extra_deps[@]}"; do
+      block="${block}
+      - ${dep}"
+    done
+    echo "$block"
+  fi
+}
+
 # Generate docker-compose file
 COMPOSE_FILE="${TEST_PASS_DIR}/docker-compose/${TEST_SLUG}-compose.yaml"
 
@@ -258,10 +312,8 @@ services:
       wan:
         ipv4_address: ${RELAY_IP}
         interface_name: wan0
-        gw_priority: 1000
       hole-punch-network:
         interface_name: redis0
-        gw_priority: 100
     cap_add:
       - NET_ADMIN
     environment:
@@ -275,11 +327,9 @@ ${RELAY_ENV}
       wan:
         ipv4_address: ${DIALER_ROUTER_WAN_IP}
         interface_name: wan0
-        gw_priority: 1000
       lan-dialer:
         ipv4_address: ${DIALER_ROUTER_LAN_IP}
         interface_name: lan0
-        gw_priority: 100
     cap_add:
       - NET_ADMIN
     sysctls:
@@ -288,6 +338,7 @@ ${RELAY_ENV}
       - net.ipv4.conf.default.forwarding=1
       - net.ipv4.conf.all.rp_filter=0
       - net.ipv4.conf.default.rp_filter=0
+${DIALER_ROUTER_EXTRA}
     depends_on:
       - relay
     environment:
@@ -301,11 +352,9 @@ ${DIALER_ROUTER_ENV}
       wan:
         ipv4_address: ${LISTENER_ROUTER_WAN_IP}
         interface_name: wan0
-        gw_priority: 1000
       lan-listener:
         ipv4_address: ${LISTENER_ROUTER_LAN_IP}
         interface_name: lan0
-        gw_priority: 100
     cap_add:
       - NET_ADMIN
     sysctls:
@@ -314,6 +363,7 @@ ${DIALER_ROUTER_ENV}
       - net.ipv4.conf.default.forwarding=1
       - net.ipv4.conf.all.rp_filter=0
       - net.ipv4.conf.default.rp_filter=0
+${LISTENER_ROUTER_EXTRA}
     depends_on:
       - relay
     environment:
@@ -327,16 +377,11 @@ ${LISTENER_ROUTER_ENV}
       lan-dialer:
         ipv4_address: ${DIALER_IP}
         interface_name: lan0
-        gw_priority: 1000
       hole-punch-network:
         interface_name: redis0
-        gw_priority: 1000
     cap_add:
       - NET_ADMIN
-    depends_on:
-      - relay
-      - dialer-router
-      - proxy-${TEST_KEY}
+$(build_depends_on_block "${DIALER_ROUTER_ID}" "dialer-router" "proxy-${TEST_KEY}")
     environment:
 ${DIALER_ENV}
 
@@ -348,16 +393,11 @@ ${DIALER_ENV}
       lan-listener:
         ipv4_address: ${LISTENER_IP}
         interface_name: lan0
-        gw_priority: 1000
       hole-punch-network:
         interface_name: redis0
-        gw_priority: 1000
     cap_add:
       - NET_ADMIN
-    depends_on:
-      - relay
-      - listener-router
-      - proxy-${TEST_KEY}
+$(build_depends_on_block "${LISTENER_ROUTER_ID}" "listener-router" "proxy-${TEST_KEY}")
     environment:
 ${LISTENER_ENV}
 
@@ -395,10 +435,8 @@ services:
       wan:
         ipv4_address: ${RELAY_IP}
         interface_name: wan0
-        gw_priority: 1000
       hole-punch-network:
         interface_name: redis0
-        gw_priority: 100
     cap_add:
       - NET_ADMIN
     environment:
@@ -412,11 +450,9 @@ ${RELAY_ENV}
       wan:
         ipv4_address: ${DIALER_ROUTER_WAN_IP}
         interface_name: wan0
-        gw_priority: 1000
       lan-dialer:
         ipv4_address: ${DIALER_ROUTER_LAN_IP}
         interface_name: lan0
-        gw_priority: 100
     cap_add:
       - NET_ADMIN
     sysctls:
@@ -425,6 +461,7 @@ ${RELAY_ENV}
       - net.ipv4.conf.default.forwarding=1
       - net.ipv4.conf.all.rp_filter=0
       - net.ipv4.conf.default.rp_filter=0
+${DIALER_ROUTER_EXTRA}
     depends_on:
       - relay
     environment:
@@ -438,11 +475,9 @@ ${DIALER_ROUTER_ENV}
       wan:
         ipv4_address: ${LISTENER_ROUTER_WAN_IP}
         interface_name: wan0
-        gw_priority: 1000
       lan-listener:
         ipv4_address: ${LISTENER_ROUTER_LAN_IP}
         interface_name: lan0
-        gw_priority: 100
     cap_add:
       - NET_ADMIN
     sysctls:
@@ -451,6 +486,7 @@ ${DIALER_ROUTER_ENV}
       - net.ipv4.conf.default.forwarding=1
       - net.ipv4.conf.all.rp_filter=0
       - net.ipv4.conf.default.rp_filter=0
+${LISTENER_ROUTER_EXTRA}
     depends_on:
       - relay
     environment:
@@ -464,15 +500,11 @@ ${LISTENER_ROUTER_ENV}
       lan-dialer:
         ipv4_address: ${DIALER_IP}
         interface_name: lan0
-        gw_priority: 1000
       hole-punch-network:
         interface_name: redis0
-        gw_priority: 1000
     cap_add:
       - NET_ADMIN
-    depends_on:
-      - relay
-      - dialer-router
+$(build_depends_on_block "${DIALER_ROUTER_ID}" "dialer-router")
     environment:
 ${DIALER_ENV}
 
@@ -484,15 +516,11 @@ ${DIALER_ENV}
       lan-listener:
         ipv4_address: ${LISTENER_IP}
         interface_name: lan0
-        gw_priority: 1000
       hole-punch-network:
         interface_name: redis0
-        gw_priority: 1000
     cap_add:
       - NET_ADMIN
-    depends_on:
-      - relay
-      - listener-router
+$(build_depends_on_block "${LISTENER_ROUTER_ID}" "listener-router")
     environment:
 ${LISTENER_ENV}
 
