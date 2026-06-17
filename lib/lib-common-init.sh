@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Common variable initialization for all test suites
-# Provides consistent defaults and variable names across transport, perf, and hole-punch tests
+# Provides consistent defaults and variable names across transport, perf, hole-punch, and misc tests
 
 # Source lib-host-os.sh if not already loaded
 if ! type detect_host_os &>/dev/null; then

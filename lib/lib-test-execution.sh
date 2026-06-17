@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Common test execution utilities
-# Used by transport, perf, and hole-punch test runners
+# Used by transport, perf, hole-punch, and misc test runners
 
 # Append lowercase copies of all environment variables
 # Input: a string of docker-compose environment variable lines
