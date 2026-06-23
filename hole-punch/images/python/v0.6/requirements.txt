@@ -1,5 +1,5 @@
 # py-libp2p with DCUtR support
-libp2p @ git+https://github.com/libp2p/py-libp2p.git@5723418a4a3dd8d8f7648e29f38a10ca650047a5
+git+https://github.com/sumanjeet0012/py-libp2p.git@64a9e5bb0d4c5262571570cadd3bd33b2f504655
 
 # Redis client for test coordination
 redis>=4.0.0

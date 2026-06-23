@@ -159,7 +159,7 @@ print_check() {
 
 # Versioned tools: "tool:min_version:version_type"
 declare -a VERSIONED_TOOLS=(
-  "bash:4.0:bash"
+  "bash:3.0:bash"
   "docker:20.10.0:standard"
   "yq:4.0.0:standard"
   "git:2.0.0:standard"

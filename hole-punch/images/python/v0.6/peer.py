@@ -20,7 +20,7 @@ from libp2p.peer.peerinfo import info_from_p2p_addr, PeerInfo
 from libp2p.peer.id import ID
 from libp2p.relay.circuit_v2.dcutr import DCUtRProtocol
 from libp2p.relay.circuit_v2.protocol import CircuitV2Protocol, DEFAULT_RELAY_LIMITS
-from libp2p.relay.circuit_v2.config import RelayConfig, RelayRole
+from libp2p.relay.circuit_v2.config import RelayConfig, RelayRole, RelayLimits
 import libp2p.relay.circuit_v2.transport as _circuit_transport_mod
 from libp2p.relay.circuit_v2.transport import CircuitV2Transport
 from libp2p.security.noise.transport import (
@@ -31,7 +31,7 @@ from libp2p.security.tls.transport import (
     PROTOCOL_ID as TLS_PROTOCOL_ID,
     TLSTransport,
 )
-from libp2p.tools.async_service import background_trio_service
+from libp2p.tools.anyio_service import background_trio_service
 from libp2p.network.connection.raw_connection import RawConnection
 
 logger = logging.getLogger("hole-punch-peer")
@@ -374,11 +374,19 @@ class HolePunchPeer:
             listen_addrs=[listen_addr],
         )
 
+        limits = RelayLimits(
+            duration=3600,
+            data=100 * 1024 * 1024,
+            max_circuit_conns=1000,
+            max_reservations=500,
+        )
+
         # Configure relay client
         relay_config = RelayConfig(
             roles=RelayRole.STOP | RelayRole.CLIENT,
+            limits=limits,
         )
-        relay_protocol = CircuitV2Protocol(self.host, DEFAULT_RELAY_LIMITS, allow_hop=False)
+        relay_protocol = CircuitV2Protocol(self.host, limits, allow_hop=False)
         dcutr_protocol = DCUtRProtocol(self.host)
 
         async with self.host.run(listen_addrs=[listen_addr]):
@@ -576,7 +584,24 @@ class HolePunchPeer:
                                 raw_conn, listener_peer_id
                             )
                     else:
-                        await transport.dial(circuit_addr)
+                        for attempt in range(3):
+                            try:
+                                stream = await self._dial_python_relay(
+                                    relay_info, listener_peer_id
+                                )
+                                if stream:
+                                    raw_conn = RawConnection(stream=stream, initiator=True)
+                                    await self.host.upgrade_outbound_connection(
+                                        raw_conn, listener_peer_id
+                                    )
+                                break
+                            except Exception as e:
+                                import traceback
+                                print(f"Dial attempt {attempt + 1} failed: {e}", file=sys.stderr)
+                                traceback.print_exc()
+                                if attempt == 2:
+                                    raise
+                                await trio.sleep(1.0)
                     print("Connected to listener through relay", file=sys.stderr)
 
                     # Initiate hole punch
@@ -680,6 +705,41 @@ class HolePunchPeer:
         except Exception as e:
             logger.debug("Rust relay reservation failed: %s", e)
             return False
+
+    async def _dial_python_relay(self, relay_info, listener_peer_id):
+        hop_stream = await self.host.new_stream(
+            relay_info.peer_id, [_circuit_transport_mod.PROTOCOL_ID]
+        )
+        if not hop_stream:
+            raise ConnectionError("Failed to open stream to relay")
+
+        try:
+            from libp2p.relay.circuit_v2.pb.circuit_pb2 import HopMessage
+            from libp2p.peer.peerstore import env_to_send_in_RPC
+            import trio
+            
+            envelope_bytes, _ = env_to_send_in_RPC(self.host)
+            connect_msg = HopMessage(
+                type=HopMessage.CONNECT,
+                peer=listener_peer_id.to_bytes(),
+                senderRecord=envelope_bytes,
+            )
+            await hop_stream.write(connect_msg.SerializeToString())
+
+            with trio.fail_after(10):
+                resp_bytes = await hop_stream.read(1024)
+            resp = HopMessage()
+            resp.ParseFromString(resp_bytes)
+            status_code = getattr(resp.status, "code", 200)
+            if status_code not in (0, 200):
+                raise ConnectionError(f"Relay rejected CONNECT with status {status_code}")
+            return hop_stream
+        except Exception:
+            try:
+                await hop_stream.close()
+            except Exception:
+                pass
+            raise
 
     async def _dial_rust_relay(
         self,

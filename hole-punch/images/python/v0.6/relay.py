@@ -35,7 +35,7 @@ from libp2p.security.tls.transport import (
     PROTOCOL_ID as TLS_PROTOCOL_ID,
     TLSTransport,
 )
-from libp2p.tools.async_service import background_trio_service
+from libp2p.tools.anyio_service import background_trio_service
 
 logger = logging.getLogger("hole-punch-relay")
 
@@ -605,8 +605,8 @@ class HolePunchRelay:
         limits = RelayLimits(
             duration=3600,
             data=100 * 1024 * 1024,
-            max_circuit_conns=10,
-            max_reservations=5,
+            max_circuit_conns=1000,
+            max_reservations=500,
         )
 
         relay_config = RelayConfig(
@@ -617,6 +617,8 @@ class HolePunchRelay:
         self._relay_protocol = CircuitV2Protocol(
             self.host, limits=limits, allow_hop=True
         )
+
+
 
         async with self.host.run(listen_addrs=[listen_addr]):
             async with background_trio_service(self._relay_protocol):
