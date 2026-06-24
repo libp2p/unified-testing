@@ -135,15 +135,8 @@ jobs:
 
             echo "relay-select=${{ steps.detect.outputs.changed-relays }}" >> $GITHUB_OUTPUT
 
-            # Negate each relay ID in the pipe-separated list
-            # Always include ~failing to skip known-broken relays
-            CHANGED_RELAYS="${{ steps.detect.outputs.changed-relays }}"
-            if [ -n "$CHANGED_RELAYS" ]; then
-              NEGATED_RELAYS=$(echo "$CHANGED_RELAYS" | sed 's/|/|!/g;s/^/!/')
-              echo "relay-ignore=~failing|$NEGATED_RELAYS" >> $GITHUB_OUTPUT
-            else
-              echo "relay-ignore=~failing" >> $GITHUB_OUTPUT
-            fi
+            # Same for relay ignore
+            echo "relay-ignore=~failing" >> $GITHUB_OUTPUT
 
             echo "router-select=${{ steps.detect.outputs.changed-routers }}" >> $GITHUB_OUTPUT
 
