@@ -5,7 +5,7 @@
 # Usage: --test-select "~linux" or --test-ignore "!~linux"
 test-aliases:
   - alias: "failing"
-    value: "rust-v0.56 x rust-v0.56"
+    value: ""
   - alias: "python"
     value: "py-v0.6"
 
