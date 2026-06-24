@@ -677,6 +677,7 @@ class HolePunchPeer:
                     pass
                 return
             await _write_varint_prefixed_message(stream, _encode_rust_stop_status_ok())
+            import trio; await trio.sleep(0.5)
             peer_id = ID(peer_id_bytes)
             remote_ma = f"/p2p/{peer_id.to_base58()}"
             await relay_protocol.handle_incoming_connection(stream, remote_ma)
