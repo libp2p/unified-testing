@@ -1,0 +1,9 @@
+implementations:
+  - id: py
+    imageName: kad-dht-py
+    buildContext: ./images/py
+    dockerfile: Dockerfile
+  - id: dotnet
+    imageName: kad-dht-dotnet
+    buildContext: ./images/dotnet
+    dockerfile: Dockerfile
