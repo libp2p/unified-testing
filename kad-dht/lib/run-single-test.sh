@@ -113,6 +113,7 @@ cat >> "${RESULTS_FILE}" <<EOF
     querier: ${QUERIER_ID}
     status: ${FINAL_STATUS}
     duration: ${TEST_DURATION}s
+    querier_output: |
 ${INDENTED_YAML}
 EOF
 
