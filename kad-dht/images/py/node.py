@@ -9,6 +9,7 @@ from libp2p.crypto.rsa import create_new_key_pair
 from libp2p.tools.utils import info_from_p2p_addr
 from libp2p.kad_dht.kad_dht import DHTMode, KadDHT
 from libp2p.tools.async_service.trio_service import background_trio_service
+from libp2p.records.validator import Validator
 from multiaddr import Multiaddr
 
 logging.basicConfig(
@@ -16,6 +17,12 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+class TestValidator(Validator):
+    def validate(self, key: str, value: bytes) -> None:
+        pass
+    def select(self, key: str, values: list[bytes]) -> int:
+        return 0
 
 async def main() -> None:
     role = os.environ.get("ROLE")
@@ -63,6 +70,7 @@ async def main() -> None:
             logger.info("Bootstrap node waiting indefinitely...")
             
             dht = KadDHT(host, DHTMode.SERVER)
+            dht.register_validator("example", TestValidator())
             async with background_trio_service(dht):
                 while True:
                     await trio.sleep(3600)
@@ -83,9 +91,13 @@ async def main() -> None:
                 await host.connect(info)
             
             dht = KadDHT(host, DHTMode.SERVER)
+            dht.register_validator("example", TestValidator())
             async with background_trio_service(dht):
                 logger.info("Provider announcing key 'interop-test-key'...")
                 await dht.provide("interop-test-key")
+                
+                logger.info("Provider putting value for '/example/data'...")
+                await dht.put_value("/example/data", b"hello world")
                 
                 provider_done_key = f"{test_key}_provider_done"
                 await trio.to_thread.run_sync(r.set, provider_done_key, "done")
@@ -117,6 +129,7 @@ async def main() -> None:
                 await host.connect(info)
             
             dht = KadDHT(host, DHTMode.CLIENT)
+            dht.register_validator("example", TestValidator())
             found = False
             async with background_trio_service(dht):
                 logger.info("Querier searching for key 'interop-test-key'...")
@@ -125,11 +138,25 @@ async def main() -> None:
                 found = bool(providers)
                 if found:
                     logger.info(f"Found {len(providers)} provider(s)!")
-                    print("status: pass")
-                    print("latency:")
-                    print("  handshake_plus_one_rtt: 0")
-                    print("  ping_rtt: 0")
-                    print("  unit: ms")
+                    
+                    logger.info("Querier getting value for '/example/data'...")
+                    try:
+                        value = await dht.get_value("/example/data")
+                        if value == b"hello world":
+                            logger.info("Successfully retrieved exact value: 'hello world'")
+                            print("status: pass")
+                            print("latency:")
+                            print("  handshake_plus_one_rtt: 0")
+                            print("  ping_rtt: 0")
+                            print("  unit: ms")
+                        else:
+                            logger.error(f"Got wrong value: {value}")
+                            print("status: fail")
+                            found = False
+                    except Exception as e:
+                        logger.error(f"Failed to get_value: {e}")
+                        print("status: fail")
+                        found = False
                 else:
                     logger.warning("No providers found")
                     print("status: fail")

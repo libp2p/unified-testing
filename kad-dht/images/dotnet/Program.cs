@@ -43,7 +43,14 @@ namespace DotnetNode
             // var peer = new Libp2pPeerFactory().Create();
             
             // For now, generating a simulated peer ID for the test structure
-            var peerId = "12D3KooW" + Guid.NewGuid().ToString("N").Substring(0, 16);
+            string[] peerIds = new[] {
+                "QmUkcRXiP8FWmk9q5gFGYJteHTThuwv7RHRicEjtmhzY3H",
+                "QmcgpsyWgH8Y8ajJz1Cu72KnS5uo2Aa2LpzU7kinSupNKC",
+                "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx5N",
+                "QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco",
+                "QmV5G4hWGGcrRX3g3xHkC6B9iWjLxyV9A9aJpU4bQ56Xg1"
+            };
+            var peerId = peerIds[new Random().Next(peerIds.Length)];
             var port = new Random().Next(10000, 60000); // Simulated port assignment
             var myMultiaddr = $"/ip4/{containerIp}/tcp/{port}/p2p/{peerId}";
 
