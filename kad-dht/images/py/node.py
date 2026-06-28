@@ -94,12 +94,20 @@ async def main() -> None:
             dht.register_validator("example", TestValidator())
             async with background_trio_service(dht):
                 logger.info("Test 1: Provider announcing key 'interop-test-key'...")
-                await dht.provide("interop-test-key")
-                logger.info("Test 1 -> Success")
+                try:
+                    await dht.provide("interop-test-key")
+                    logger.info("Test 1 -> Success")
+                except Exception as e:
+                    logger.error(f"Test 1 FAILED: Could not announce provider: {e}")
+                    raise
                 
                 logger.info("Test 3: Provider putting value for '/example/data'...")
-                await dht.put_value("/example/data", b"hello from py client")
-                logger.info("Test 3 -> Success")
+                try:
+                    await dht.put_value("/example/data", b"hello from py client")
+                    logger.info("Test 3 -> Success")
+                except Exception as e:
+                    logger.error(f"Test 3 FAILED: Could not put value: {e}")
+                    raise
                 
                 provider_done_key = f"{test_key}_provider_done"
                 await trio.to_thread.run_sync(r.set, provider_done_key, "done")
