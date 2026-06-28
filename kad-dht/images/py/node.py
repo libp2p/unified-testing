@@ -9,7 +9,6 @@ from libp2p import new_host
 from libp2p.crypto.rsa import create_new_key_pair
 from libp2p.tools.utils import info_from_p2p_addr
 from libp2p.kad_dht.kad_dht import DHTMode, KadDHT
-from libp2p.tools.anyio_service import background_trio_service
 from multiaddr import Multiaddr
 
 logging.basicConfig(
@@ -64,9 +63,9 @@ async def main() -> None:
             logger.info("Bootstrap node waiting indefinitely...")
             
             dht = KadDHT(host, DHTMode.SERVER)
-            async with background_trio_service(dht):
-                while True:
-                    await trio.sleep(3600)
+            nursery.start_soon(dht.run)
+            while True:
+                await trio.sleep(3600)
                 
         elif role == "provider":
             bootstrap_key = f"{test_key}_bootstrap_addr"
@@ -83,15 +82,15 @@ async def main() -> None:
                 await host.connect(info.peer_id, maddr)
             
             dht = KadDHT(host, DHTMode.SERVER)
-            async with background_trio_service(dht):
-                logger.info("Provider announcing key 'interop-test-key'...")
-                await dht.provide("interop-test-key")
-                
-                provider_done_key = f"{test_key}_provider_done"
-                await trio.to_thread.run_sync(r.set, provider_done_key, "done")
-                
-                while True:
-                    await trio.sleep(3600)
+            nursery.start_soon(dht.run)
+            logger.info("Provider announcing key 'interop-test-key'...")
+            await dht.provide("interop-test-key")
+            
+            provider_done_key = f"{test_key}_provider_done"
+            await trio.to_thread.run_sync(r.set, provider_done_key, "done")
+            
+            while True:
+                await trio.sleep(3600)
                 
         elif role == "querier":
             bootstrap_key = f"{test_key}_bootstrap_addr"
@@ -115,14 +114,14 @@ async def main() -> None:
                 await host.connect(info.peer_id, maddr)
             
             dht = KadDHT(host, DHTMode.CLIENT)
-            async with background_trio_service(dht):
-                logger.info("Querier searching for key 'interop-test-key'...")
-                providers = await dht.find_providers("interop-test-key")
-                
-                if providers:
-                    logger.info("Found providers!")
-                else:
-                    logger.warning("No providers found")
+            nursery.start_soon(dht.run)
+            logger.info("Querier searching for key 'interop-test-key'...")
+            providers = await dht.find_providers("interop-test-key")
+            
+            if providers:
+                logger.info("Found providers!")
+            else:
+                logger.warning("No providers found")
             
             # Output YAML format exactly as transport test expects
             print("status: pass")
