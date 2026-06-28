@@ -110,6 +110,7 @@ class Program
                 PublicKey = new Libp2p.Protocols.KadDht.Kademlia.PublicKey(remotePeerId.Bytes.ToArray()),
                 Multiaddrs = [ bootstrapAddr ]
             });
+            await Task.Delay(1000, cts.Token);
             await kadProtocol.BootstrapAsync(cts.Token);
 
             try
@@ -174,6 +175,7 @@ class Program
                     PublicKey = new Libp2p.Protocols.KadDht.Kademlia.PublicKey(remotePeerId.Bytes.ToArray()),
                     Multiaddrs = [ bootstrapAddr ]
                 });
+                await Task.Delay(1000, querierCts.Token); // Give routing table time to process AddNode
                 await kadProtocol.BootstrapAsync(querierCts.Token);
 
                 bool foundProviders = false;
