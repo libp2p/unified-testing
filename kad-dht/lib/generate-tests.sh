@@ -30,8 +30,7 @@ for i in "${!impls[@]}"; do
             querier="${impls[$k]}"
             querier_img="${images[$k]}"
             
-            # The user initially requested 4 combinations, but the dynamic matrix will generate all 8 combinations
-            # of (py, dotnet)^3.
+            
             
             test_id="${bootstrap}_x_${provider}_x_${querier}"
             

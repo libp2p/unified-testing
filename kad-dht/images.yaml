@@ -1,3 +1,5 @@
+# NOTE: This file uses relative paths (e.g. ./images/py) that expect to be executed
+# from the kad-dht root directory via the ./run.sh script.
 implementations:
   - id: py
     imageName: kad-dht-py
@@ -7,3 +9,7 @@ implementations:
     imageName: kad-dht-dotnet
     buildContext: ./images/dotnet
     dockerfile: Dockerfile
+    source:
+      type: github
+      repo: NethermindEth/dotnet-libp2p
+      commit: 960726885ca467fd2205bbb0fa4821a34b9e8f31

@@ -82,15 +82,36 @@ TEST_END=$(date +%s)
 TEST_DURATION=$((${TEST_END} - ${TEST_START}))
 
 QUERIER_LOGS=$(docker compose -f "${COMPOSE_FILE}" logs querier 2>/dev/null || true)
-QUERIER_YAML=$(echo "${QUERIER_LOGS}" | grep -E "querier.*\| (latency:|  (handshake_plus_one_rtt|ping_rtt|unit):|error:)" | sed 's/^.*| //' || true)
+QUERIER_YAML=$(echo "${QUERIER_LOGS}" | grep -E "querier.*\| (status:|error:)" | sed 's/^.*| //' || true)
 INDENTED_YAML=$(echo "${QUERIER_YAML}" | sed 's/^/    /')
 
+# Determine final status (treat as fail if exit code is non-zero OR if querier printed status: fail)
+if [ "${EXIT_CODE}" -ne 0 ] || echo "${QUERIER_YAML}" | grep -q "status: fail"; then
+    FINAL_STATUS="fail"
+else
+    FINAL_STATUS="pass"
+fi
+
+# Save complete result to individual file
+cat > "${TEST_PASS_DIR}/results/${TEST_NAME}.yaml" <<EOF
+test: ${TEST_NAME}
+bootstrap: ${BOOTSTRAP_ID}
+provider: ${PROVIDER_ID}
+querier: ${QUERIER_ID}
+status: ${FINAL_STATUS}
+duration: ${TEST_DURATION}s
+
+# Output from querier
+${QUERIER_YAML}
+EOF
+
+# Append to combined results file
 cat >> "${RESULTS_FILE}" <<EOF
-  - name: ${TEST_NAME}
+  - id: ${TEST_NAME}
     bootstrap: ${BOOTSTRAP_ID}
     provider: ${PROVIDER_ID}
     querier: ${QUERIER_ID}
-    status: $([ "${EXIT_CODE}" -eq 0 ] && echo "pass" || echo "fail")
+    status: ${FINAL_STATUS}
     duration: ${TEST_DURATION}s
 ${INDENTED_YAML}
 EOF

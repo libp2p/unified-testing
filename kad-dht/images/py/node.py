@@ -5,7 +5,7 @@ import sys
 import redis
 import trio
 from libp2p import new_host
-from libp2p.crypto.rsa import create_new_key_pair
+from libp2p.crypto.ed25519 import create_new_key_pair
 from libp2p.tools.utils import info_from_p2p_addr
 from libp2p.kad_dht.kad_dht import DHTMode, KadDHT
 from libp2p.tools.async_service.trio_service import background_trio_service
@@ -93,17 +93,17 @@ async def main() -> None:
             dht = KadDHT(host, DHTMode.SERVER)
             dht.register_validator("example", TestValidator())
             async with background_trio_service(dht):
-                logger.info("Test 1: Provider announcing key 'interop-test-key'...")
+                logger.info(f"Test 1: Provider announcing key 'interop-test-key-{test_key}'...")
                 try:
-                    await dht.provide("interop-test-key")
+                    await dht.provide(f"interop-test-key-{test_key}")
                     logger.info("Test 1 -> Success")
                 except Exception as e:
                     logger.error(f"Test 1 FAILED: Could not announce provider: {e}")
                     raise
                 
-                logger.info("Test 3: Provider putting value for '/example/data'...")
+                logger.info(f"Test 3: Provider putting value for '/example/data/{test_key}'...")
                 try:
-                    await dht.put_value("/example/data", b"hello from py client")
+                    await dht.put_value(f"/example/data/{test_key}", b"hello from py client")
                     logger.info("Test 3 -> Success")
                 except Exception as e:
                     logger.error(f"Test 3 FAILED: Could not put value: {e}")
@@ -140,40 +140,42 @@ async def main() -> None:
             
             dht = KadDHT(host, DHTMode.CLIENT)
             dht.register_validator("example", TestValidator())
-            found = False
+            exit_code = 0
             async with background_trio_service(dht):
-                logger.info("Test 2: Querier searching for key 'interop-test-key'...")
-                providers = await dht.find_providers("interop-test-key")
+                logger.info(f"Test 2: Querier searching for key 'interop-test-key-{test_key}'...")
+                providers = await dht.find_providers(f"interop-test-key-{test_key}")
                 
                 found = bool(providers)
                 if found:
                     logger.info(f"Test 2 -> Success! Found {len(providers)} provider(s)!")
                     
-                    logger.info("Test 4: Querier getting value for '/example/data'...")
+                    logger.info(f"Test 4: Querier getting value for '/example/data/{test_key}'...")
                     try:
-                        value = await dht.get_value("/example/data")
-                        if value == b"hello from py client":
-                            logger.info("Test 4 -> Success! Retrieved exact value: 'hello from py client'")
+                        value = await dht.get_value(f"/example/data/{test_key}")
+                        # Accept any 'hello from' message for cross-language interop
+                        if value and b"hello from" in value:
+                            logger.info(f"Test 4 -> Success! Retrieved value: '{value.decode()}'")
                             print("status: pass")
                         else:
-                            logger.error(f"Test Failed: Expected 'hello from py client', but got {value}")
-                            print(f"error: Expected 'hello from py client', but got {value}")
+                            logger.error(f"Test Failed: Expected value containing 'hello from', but got {value}")
+                            print(f"error: Expected value containing 'hello from', but got {value}")
                             print("status: fail")
-                            found = False
+                            exit_code = 1
                     except Exception as e:
                         logger.error(f"Test Failed: Exception during get_value: {e}")
                         print(f"error: Exception during get_value: {e}")
                         print("status: fail")
-                        found = False
+                        exit_code = 1
                 else:
-                    logger.error("Test Failed: No providers found in DHT for key 'interop-test-key'")
-                    print("error: No providers found in DHT for key 'interop-test-key'")
+                    logger.error(f"Test Failed: No providers found in DHT for key 'interop-test-key-{test_key}'")
+                    print(f"error: No providers found in DHT for key 'interop-test-key-{test_key}'")
                     print("status: fail")
+                    exit_code = 1
                     
                 nursery.cancel_scope.cancel()
             
-            if not found:
-                sys.exit(1)
+            if exit_code != 0:
+                sys.exit(exit_code)
         else:
             logger.error(f"Unknown role: {role}")
             sys.exit(1)

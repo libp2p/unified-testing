@@ -1,0 +1,25 @@
+name: Kad-DHT Interoperability Tests (PR)
+
+on:
+  pull_request:
+    paths:
+      - 'kad-dht/**'
+      - '.github/actions/run-bash-kad-dht-test/**'
+      - '.github/workflows/kad-dht-interop-pr.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  run-tests:
+    runs-on: [self-hosted, linux, x64, ephemeral]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run kad-dht interop tests
+        uses: ./.github/actions/run-bash-kad-dht-test

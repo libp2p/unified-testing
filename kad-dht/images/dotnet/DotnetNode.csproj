@@ -2,15 +2,22 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="StackExchange.Redis" Version="2.7.4" />
-    <PackageReference Include="Nethermind.Libp2p" Version="1.0.0-preview.25" />
-    <!-- Replace with accurate version if needed -->
+    <ProjectReference Include="dotnet-libp2p\src\libp2p\Libp2p\Libp2p.csproj" />
+    <ProjectReference Include="dotnet-libp2p\src\libp2p\Libp2p.Protocols.KadDht\Libp2p.Protocols.KadDht.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="dotnet-libp2p\**" />
+    <Content Remove="dotnet-libp2p\**" />
+    <EmbeddedResource Remove="dotnet-libp2p\**" />
+    <None Remove="dotnet-libp2p\**" />
   </ItemGroup>
 
 </Project>
