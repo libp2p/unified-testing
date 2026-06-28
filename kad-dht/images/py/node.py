@@ -38,10 +38,10 @@ async def main() -> None:
     async with host.run(listen_addrs=listen_addrs), trio.open_nursery() as nursery:
         nursery.start_soon(host.get_peerstore().start_cleanup_task, 60)
         
-        addrs = host.get_network().listen_addresses
+        addrs = host.get_addrs()
         while not addrs:
             await trio.sleep(0.1)
-            addrs = host.get_network().listen_addresses
+            addrs = host.get_addrs()
         
         # Determine container IP without blocking the async loop
         def get_container_ip() -> str:
@@ -53,7 +53,7 @@ async def main() -> None:
             
         container_ip = await trio.to_thread.run_sync(get_container_ip)
 
-        port = addrs[0].get_endpoints()[1].port
+        port = addrs[0].value_for_protocol("tcp")
         my_multiaddr = f"/ip4/{container_ip}/tcp/{port}/p2p/{host.get_id().to_string()}"
         logger.info(f"Node started at {my_multiaddr}")
 
