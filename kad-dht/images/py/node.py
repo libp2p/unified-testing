@@ -93,11 +93,13 @@ async def main() -> None:
             dht = KadDHT(host, DHTMode.SERVER)
             dht.register_validator("example", TestValidator())
             async with background_trio_service(dht):
-                logger.info("Provider announcing key 'interop-test-key'...")
+                logger.info("Test 1: Provider announcing key 'interop-test-key'...")
                 await dht.provide("interop-test-key")
+                logger.info("Test 1 -> Success")
                 
-                logger.info("Provider putting value for '/example/data'...")
-                await dht.put_value("/example/data", b"hello world")
+                logger.info("Test 3: Provider putting value for '/example/data'...")
+                await dht.put_value("/example/data", b"hello from py client")
+                logger.info("Test 3 -> Success")
                 
                 provider_done_key = f"{test_key}_provider_done"
                 await trio.to_thread.run_sync(r.set, provider_done_key, "done")
@@ -132,33 +134,32 @@ async def main() -> None:
             dht.register_validator("example", TestValidator())
             found = False
             async with background_trio_service(dht):
-                logger.info("Querier searching for key 'interop-test-key'...")
+                logger.info("Test 2: Querier searching for key 'interop-test-key'...")
                 providers = await dht.find_providers("interop-test-key")
                 
                 found = bool(providers)
                 if found:
-                    logger.info(f"Found {len(providers)} provider(s)!")
+                    logger.info(f"Test 2 -> Success! Found {len(providers)} provider(s)!")
                     
-                    logger.info("Querier getting value for '/example/data'...")
+                    logger.info("Test 4: Querier getting value for '/example/data'...")
                     try:
                         value = await dht.get_value("/example/data")
-                        if value == b"hello world":
-                            logger.info("Successfully retrieved exact value: 'hello world'")
+                        if value == b"hello from py client":
+                            logger.info("Test 4 -> Success! Retrieved exact value: 'hello from py client'")
                             print("status: pass")
-                            print("latency:")
-                            print("  handshake_plus_one_rtt: 0")
-                            print("  ping_rtt: 0")
-                            print("  unit: ms")
                         else:
-                            logger.error(f"Got wrong value: {value}")
+                            logger.error(f"Test Failed: Expected 'hello from py client', but got {value}")
+                            print(f"error: Expected 'hello from py client', but got {value}")
                             print("status: fail")
                             found = False
                     except Exception as e:
-                        logger.error(f"Failed to get_value: {e}")
+                        logger.error(f"Test Failed: Exception during get_value: {e}")
+                        print(f"error: Exception during get_value: {e}")
                         print("status: fail")
                         found = False
                 else:
-                    logger.warning("No providers found")
+                    logger.error("Test Failed: No providers found in DHT for key 'interop-test-key'")
+                    print("error: No providers found in DHT for key 'interop-test-key'")
                     print("status: fail")
                     
                 nursery.cancel_scope.cancel()

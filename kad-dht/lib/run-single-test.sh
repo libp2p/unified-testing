@@ -82,7 +82,7 @@ TEST_END=$(date +%s)
 TEST_DURATION=$((${TEST_END} - ${TEST_START}))
 
 QUERIER_LOGS=$(docker compose -f "${COMPOSE_FILE}" logs querier 2>/dev/null || true)
-QUERIER_YAML=$(echo "${QUERIER_LOGS}" | grep -E "querier.*\| (latency:|  (handshake_plus_one_rtt|ping_rtt|unit):)" | sed 's/^.*| //' || true)
+QUERIER_YAML=$(echo "${QUERIER_LOGS}" | grep -E "querier.*\| (latency:|  (handshake_plus_one_rtt|ping_rtt|unit):|error:)" | sed 's/^.*| //' || true)
 INDENTED_YAML=$(echo "${QUERIER_YAML}" | sed 's/^/    /')
 
 cat >> "${RESULTS_FILE}" <<EOF
