@@ -2,13 +2,13 @@ import logging
 import os
 import socket
 import sys
-
 import redis
 import trio
 from libp2p import new_host
 from libp2p.crypto.rsa import create_new_key_pair
 from libp2p.tools.utils import info_from_p2p_addr
 from libp2p.kad_dht.kad_dht import DHTMode, KadDHT
+from libp2p.tools.async_service.trio_service import background_trio_service
 from multiaddr import Multiaddr
 
 logging.basicConfig(
@@ -33,8 +33,18 @@ async def main() -> None:
     key_pair = create_new_key_pair()
     host = new_host(key_pair=key_pair)
     
+    # Determine container IP without blocking the async loop
+    def get_container_ip() -> str:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect((redis_host, int(redis_port)))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+        
+    container_ip = await trio.to_thread.run_sync(get_container_ip)
+
     # Run host with trio context manager
-    listen_addrs = [Multiaddr("/ip4/0.0.0.0/tcp/0")]
+    listen_addrs = [Multiaddr(f"/ip4/{container_ip}/tcp/0")]
     async with host.run(listen_addrs=listen_addrs), trio.open_nursery() as nursery:
         nursery.start_soon(host.get_peerstore().start_cleanup_task, 60)
         
@@ -42,16 +52,6 @@ async def main() -> None:
         while not addrs:
             await trio.sleep(0.1)
             addrs = host.get_addrs()
-        
-        # Determine container IP without blocking the async loop
-        def get_container_ip() -> str:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect((redis_host, int(redis_port)))
-            ip = s.getsockname()[0]
-            s.close()
-            return ip
-            
-        container_ip = await trio.to_thread.run_sync(get_container_ip)
 
         port = addrs[0].value_for_protocol("tcp")
         my_multiaddr = f"/ip4/{container_ip}/tcp/{port}/p2p/{host.get_id().to_string()}"
@@ -63,9 +63,9 @@ async def main() -> None:
             logger.info("Bootstrap node waiting indefinitely...")
             
             dht = KadDHT(host, DHTMode.SERVER)
-            nursery.start_soon(dht.run)
-            while True:
-                await trio.sleep(3600)
+            async with background_trio_service(dht):
+                while True:
+                    await trio.sleep(3600)
                 
         elif role == "provider":
             bootstrap_key = f"{test_key}_bootstrap_addr"
@@ -79,18 +79,18 @@ async def main() -> None:
             info = info_from_p2p_addr(maddr)
             
             with trio.fail_after(30.0):
-                await host.connect(info.peer_id, maddr)
+                await host.connect(info)
             
             dht = KadDHT(host, DHTMode.SERVER)
-            nursery.start_soon(dht.run)
-            logger.info("Provider announcing key 'interop-test-key'...")
-            await dht.provide("interop-test-key")
-            
-            provider_done_key = f"{test_key}_provider_done"
-            await trio.to_thread.run_sync(r.set, provider_done_key, "done")
-            
-            while True:
-                await trio.sleep(3600)
+            async with background_trio_service(dht):
+                logger.info("Provider announcing key 'interop-test-key'...")
+                await dht.provide("interop-test-key")
+                
+                provider_done_key = f"{test_key}_provider_done"
+                await trio.to_thread.run_sync(r.set, provider_done_key, "done")
+                
+                while True:
+                    await trio.sleep(3600)
                 
         elif role == "querier":
             bootstrap_key = f"{test_key}_bootstrap_addr"
@@ -111,17 +111,17 @@ async def main() -> None:
             info = info_from_p2p_addr(maddr)
             
             with trio.fail_after(30.0):
-                await host.connect(info.peer_id, maddr)
+                await host.connect(info)
             
             dht = KadDHT(host, DHTMode.CLIENT)
-            nursery.start_soon(dht.run)
-            logger.info("Querier searching for key 'interop-test-key'...")
-            providers = await dht.find_providers("interop-test-key")
-            
-            if providers:
-                logger.info("Found providers!")
-            else:
-                logger.warning("No providers found")
+            async with background_trio_service(dht):
+                logger.info("Querier searching for key 'interop-test-key'...")
+                providers = await dht.find_providers("interop-test-key")
+                
+                if providers:
+                    logger.info("Found providers!")
+                else:
+                    logger.warning("No providers found")
             
             # Output YAML format exactly as transport test expects
             print("status: pass")
@@ -129,8 +129,7 @@ async def main() -> None:
             print("  handshake_plus_one_rtt: 0")
             print("  ping_rtt: 0")
             print("  unit: ms")
-            
-            sys.exit(0)
+            nursery.cancel_scope.cancel()
         else:
             logger.error(f"Unknown role: {role}")
             sys.exit(1)
