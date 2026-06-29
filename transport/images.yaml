@@ -43,7 +43,7 @@ implementations:
     source:
       type: github
       repo: qdrvm/leanp2p
-      commit: 344c66e46780944d24117d0014da1cfe2b5fc8c4
+      commit: f773777582e493340f944ebc8f8bdb4ddc816598
       dockerfile: test-plans/transport_interop/Dockerfile
     transports: [quic-v1]
     secureChannels: []
