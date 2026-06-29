@@ -80,8 +80,9 @@ done
 
 echo "Tests complete. Collecting results..."
 
-PASSED=$(grep -c "^    status: pass" "${RESULTS_FILE}" || true)
-FAILED=$(grep -c "^    status: fail" "${RESULTS_FILE}" || true)
+# Count harness status only (each test also echoes status in querier_output)
+PASSED=$(grep -A1 "^    status: pass$" "${RESULTS_FILE}" | grep -c "^    duration:" || true)
+FAILED=$(grep -A1 "^    status: fail$" "${RESULTS_FILE}" | grep -c "^    duration:" || true)
 
 cat > "${TEST_PASS_DIR}/results.yaml" <<EOF
 summary:
