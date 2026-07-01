@@ -1,0 +1,48 @@
+name: "Run Kad-DHT Interop Tests (Bash)"
+description: "Run the Kad-DHT interoperability test suite using bash scripts"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Verify docker compose
+      shell: bash
+      run: docker compose version
+
+    - name: Run kad-dht interop tests
+      shell: bash
+      working-directory: kad-dht
+      run: |
+        set -uo pipefail
+
+        EXIT_CODE=0
+        ./run.sh || EXIT_CODE=$?
+
+        # Save exit code for later
+        echo "$EXIT_CODE" > /tmp/test-exit-code.txt
+
+    - name: Find test pass directory
+      if: always()
+      id: find-test-pass
+      shell: bash
+      working-directory: kad-dht
+      run: |
+        TEST_PASS_DIR=$(ls -td results/* 2>/dev/null | head -1 || echo "")
+        echo "test-pass-dir=${TEST_PASS_DIR}" >> $GITHUB_OUTPUT
+
+    - name: Upload Test Pass Artifact
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: kad-dht-interop-test-results
+        path: kad-dht/${{ steps.find-test-pass.outputs.test-pass-dir }}/
+        retention-days: 14
+
+    - name: Fail if tests failed
+      if: always()
+      shell: bash
+      run: |
+        EXIT_CODE=$(cat /tmp/test-exit-code.txt)
+        if [ "$EXIT_CODE" -ne 0 ]; then
+          echo "::error::Test suite failed with exit code $EXIT_CODE"
+          exit $EXIT_CODE
+        fi
