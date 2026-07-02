@@ -102,42 +102,33 @@ trap cleanup EXIT
 
 # Python-only yamux tuning: forward host PY_YAMUX_* into python-v0.x containers only.
 # Read by py-libp2p yamux; ignored by Go/Rust/JS. DEBUG=true sets PY_YAMUX_DEBUG=1.
-LISTENER_PY_ENV=()
-if [[ "${LISTENER_ID}" == "python-v0.x" ]]; then
+append_py_yamux_env() {
+  local -n out_ref=$1
   if [ "${DEBUG:-false}" = "true" ]; then
-    LISTENER_PY_ENV+=("PY_YAMUX_DEBUG=1")
+    out_ref+=("PY_YAMUX_DEBUG=1")
   fi
   if [ -n "${PY_YAMUX_DISABLE_HYSTERESIS:-}" ]; then
-    LISTENER_PY_ENV+=("PY_YAMUX_DISABLE_HYSTERESIS=${PY_YAMUX_DISABLE_HYSTERESIS}")
+    out_ref+=("PY_YAMUX_DISABLE_HYSTERESIS=${PY_YAMUX_DISABLE_HYSTERESIS}")
   fi
   if [ -n "${PY_YAMUX_RELEASE_ON_READ:-}" ]; then
-    LISTENER_PY_ENV+=("PY_YAMUX_RELEASE_ON_READ=${PY_YAMUX_RELEASE_ON_READ}")
+    out_ref+=("PY_YAMUX_RELEASE_ON_READ=${PY_YAMUX_RELEASE_ON_READ}")
   fi
   if [ -n "${PY_YAMUX_ASSUME_RTT_MS:-}" ]; then
-    LISTENER_PY_ENV+=("PY_YAMUX_ASSUME_RTT_MS=${PY_YAMUX_ASSUME_RTT_MS}")
+    out_ref+=("PY_YAMUX_ASSUME_RTT_MS=${PY_YAMUX_ASSUME_RTT_MS}")
   fi
   if [ -n "${PY_YAMUX_BATCH_THRESHOLD_DIV:-}" ]; then
-    LISTENER_PY_ENV+=("PY_YAMUX_BATCH_THRESHOLD_DIV=${PY_YAMUX_BATCH_THRESHOLD_DIV}")
+    out_ref+=("PY_YAMUX_BATCH_THRESHOLD_DIV=${PY_YAMUX_BATCH_THRESHOLD_DIV}")
   fi
+}
+
+LISTENER_PY_ENV=()
+if [[ "${LISTENER_ID}" == "python-v0.x" ]]; then
+  append_py_yamux_env LISTENER_PY_ENV
 fi
 
 DIALER_PY_ENV=()
 if [[ "${DIALER_ID}" == "python-v0.x" ]]; then
-  if [ "${DEBUG:-false}" = "true" ]; then
-    DIALER_PY_ENV+=("PY_YAMUX_DEBUG=1")
-  fi
-  if [ -n "${PY_YAMUX_DISABLE_HYSTERESIS:-}" ]; then
-    DIALER_PY_ENV+=("PY_YAMUX_DISABLE_HYSTERESIS=${PY_YAMUX_DISABLE_HYSTERESIS}")
-  fi
-  if [ -n "${PY_YAMUX_RELEASE_ON_READ:-}" ]; then
-    DIALER_PY_ENV+=("PY_YAMUX_RELEASE_ON_READ=${PY_YAMUX_RELEASE_ON_READ}")
-  fi
-  if [ -n "${PY_YAMUX_ASSUME_RTT_MS:-}" ]; then
-    DIALER_PY_ENV+=("PY_YAMUX_ASSUME_RTT_MS=${PY_YAMUX_ASSUME_RTT_MS}")
-  fi
-  if [ -n "${PY_YAMUX_BATCH_THRESHOLD_DIV:-}" ]; then
-    DIALER_PY_ENV+=("PY_YAMUX_BATCH_THRESHOLD_DIV=${PY_YAMUX_BATCH_THRESHOLD_DIV}")
-  fi
+  append_py_yamux_env DIALER_PY_ENV
 fi
 
 if [ "${LISTENER_LEGACY}" == "true" ]; then

@@ -9,7 +9,7 @@ test-aliases:
   - alias: "none"
     value: "!~all"
   - alias: "images"
-    value: "dotnet-v1.0|go-v0.45|js-v3.x|python-v0.x|rust-v0.56|lua-v0.1.0"
+    value: "dotnet-v1.0|go-v0.45|js-v3.x|python-v0.x|rust-v0.56|lua-v0.1.0|eth-p2p-z-v0.0.2|nim-v1.15"
   - alias: "python"
     value: "python-v0.x"
   - alias: "baselines"
@@ -26,6 +26,10 @@ test-aliases:
     value: "dotnet-v1.0"
   - alias: "lua"
     value: "lua-v0.1.0"
+  - alias: "eth-p2p"
+    value: "eth-p2p-z-v0.0.2"
+  - alias: "nim"
+    value: "nim-v1.15"
   - alias: "failing" # As of 26 Feb 2026
     value: "go-v0.45 x js-v3.x (webtransport)|js-v3.x x go-v0.45 (webtransport)|js-v3.x x js-v3.x (webtransport)|js-v3.x x dotnet-v1.0 (tcp, tls, yamux)|rust-v0.56 x dotnet-v1.0 (tcp, tls, yamux)|dotnet-v1.0 x go-v0.45 (tcp, noise, yamux)|dotnet-v1.0 x go-v0.45 (tcp, tls, yamux)|dotnet-v1.0 x go-v0.45 (quic-v1)|dotnet-v1.0 x rust-v0.56 (tcp, noise, yamux)|dotnet-v1.0 x rust-v0.56 (tcp, tls, yamux)|dotnet-v1.0 x rust-v0.56 (quic-v1)|dotnet-v1.0 x js-v3.x (tcp, noise, yamux)|dotnet-v1.0 x js-v3.x (tcp, tls, yamux)|dotnet-v1.0 x dotnet-v1.0 (quic-v1)"
 
@@ -158,7 +162,7 @@ implementations:
     source:
       type: github
       repo: libp2p/py-libp2p
-      commit: 21be0a249851276039a0ae2f896c9691e3760ad3
+      commit: abb5b34d21971c92cd33b9bd2e9ff604dcd5032a
       dockerfile: interop/perf/Dockerfile
     transports: [tcp, ws]
     secureChannels: [noise, tls]
@@ -184,3 +188,24 @@ implementations:
     transports: [tcp]
     secureChannels: [noise]
     muxers: [yamux]
+
+  # Ethereum P2P implementation (Zig-based, quiche QUIC)
+  - id: eth-p2p-z-v0.0.2
+    source:
+      type: github
+      repo: zen-eth/eth-p2p-z
+      commit: 12108747eb96eb56000cf10b21493eb4a03d50f1
+      dockerfile: interop/perf/Dockerfile
+    transports: [quic-v1]
+    secureChannels: []
+    muxers: []
+
+  - id: nim-v1.15
+    source:
+      type: github
+      repo: vacp2p/nim-libp2p
+      commit: 1bdf2f67971529e8bee01252230bdb00ab785ef7
+      dockerfile: interop/perf/Dockerfile
+    transports: [tcp, quic-v1, ws]
+    secureChannels: [noise]
+    muxers: [yamux, mplex]
