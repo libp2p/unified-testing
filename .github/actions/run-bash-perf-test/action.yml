@@ -62,6 +62,10 @@ inputs:
     description: "Enable debug mode (sets DEBUG=true in test containers)"
     required: false
     default: "false"
+  timeout:
+    description: "Max seconds per test before harness abort"
+    required: false
+    default: ""
 
 runs:
   using: "composite"
@@ -129,6 +133,16 @@ runs:
           LATENCY_ITERATIONS_FLAG="--latency-iterations ${{ inputs.latency-iterations }}"
         fi
 
+        TIMEOUT_FLAG=""
+        if [ -n "${{ inputs.timeout }}" ]; then
+          TIMEOUT_FLAG="--timeout ${{ inputs.timeout }}"
+        fi
+
+        if echo '${{ inputs.test-select }}' | grep -q 'python'; then
+          export PY_YAMUX_DISABLE_HYSTERESIS=1
+          export PY_YAMUX_ASSUME_RTT_MS=1
+        fi
+
         ./run.sh \
           --impl-select '${{ inputs.test-select }}' \
           --test-ignore '${{ inputs.test-ignore }}' \
@@ -140,6 +154,7 @@ runs:
           $DOWNLOAD_BYTES_FLAG \
           $DURATION_FLAG \
           $LATENCY_ITERATIONS_FLAG \
+          $TIMEOUT_FLAG \
           $SNAPSHOT_FLAG \
           $EXPORT_DOCKER_FLAG \
           $FORCE_MATRIX_FLAG \

@@ -73,8 +73,8 @@ Control test behavior with these options:
 # Number of iterations for upload/download tests (default: 10)
 ./run.sh --iterations 10
 
-# Duration per iteration for throughput tests in seconds (default: 20)
-./run.sh --duration 20
+# Max seconds per test before the harness aborts (default: 300)
+./run.sh --timeout 900
 
 # Number of iterations for latency tests (default: 100)
 ./run.sh --latency-iterations 100
@@ -83,7 +83,11 @@ Control test behavior with these options:
 ./run.sh --cache-dir /srv/cache
 ```
 
-**Note**: The `--iterations` flag controls both upload and download iterations. The framework measures throughput by transferring data over a time period and measuring bytes/second.
+**Note**: The `--iterations` flag controls both upload and download iterations. Modern dialers measure throughput by transferring a fixed amount of data (`UPLOAD_BYTES` / `DOWNLOAD_BYTES`) per iteration and reporting Gbps.
+
+**Note**: `--timeout` sets `PERF_TEST_TIMEOUT_SECS` (harness limit for the whole docker-compose test). This is separate from `TEST_TIMEOUT_SECS` inside dialer/listener containers (peer/redis wait limits).
+
+**Legacy**: `--duration` (default 20s) is passed to dialers as `DURATION` but is unused by current implementations; prefer `--upload-bytes`, `--iterations`, and `--timeout`.
 
 ## Test Filtering
 
@@ -586,8 +590,10 @@ For now, all tests run locally using Docker networking. Multi-machine testing su
 
 **Tests failing with timeout**
 - Check container logs: `$TEST_PASS_DIR/logs/<test-name>.log`
-- Increase test duration: `--duration 30`
-- Enable debug mode: `--debug`
+- Each perf test is capped at **300 seconds** by default (`--timeout`). For slow stacks: `./run.sh --timeout 900 --test-select "..." --yes`
+- Do not use `--debug` for throughput runs (adds log I/O and often lowers Gbps)
+- `--duration` does not extend the harness limit and is unused by modern dialers (they transfer fixed `UPLOAD_BYTES`/`DOWNLOAD_BYTES` per iteration, not “run for N seconds”)
+- Python yamux tuning uses `PY_YAMUX_*` env vars (e.g. `PY_YAMUX_DISABLE_HYSTERESIS=1`); they are injected into **python-v0.x** containers only, not Go/Rust
 
 **Cache not working / Matrix regenerates every time**
 - Check TEST_RUN_KEY in output (should be consistent for same configuration)
