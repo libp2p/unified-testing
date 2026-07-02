@@ -8,8 +8,9 @@ The hole-punch test suite verifies that libp2p implementations can establish dir
 
 **Current implementations**:
 - **rust-libp2p**: v0.56
+- **py-libp2p**: v0.6
 - **Router**: Linux-based NAT router
-- **Relay**: rust-libp2p v0.56 relay server
+- **Relay**: rust-libp2p v0.56, py-libp2p v0.6 relay servers
 
 **Protocols tested**:
 - **Transports**: tcp, quic-v1, webrtc-direct, ws (WebSocket)
@@ -175,7 +176,7 @@ Hole-punch tests support a powerful **two-stage filtering model** with both `--*
 ./run.sh --impl-select "rust-v0.56"
 
 # SELECT: Run multiple implementations (pipe-separated)
-./run.sh --impl-select "rust-v0.56|go-v0.45"
+./run.sh --impl-select "rust-v0.56|py-v0.6"
 
 # SELECT with alias: Run all rust versions
 ./run.sh --impl-select "~rust"
@@ -771,7 +772,7 @@ docker ps | grep "hole-punch"
 # Check what will run
 ./run.sh --list-tests
 
-# Run all tests (currently only rust-v0.56)
+# Run all tests
 ./run.sh
 
 # Run specific transport only
