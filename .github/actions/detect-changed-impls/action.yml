@@ -84,6 +84,14 @@ runs:
           git show "origin/$BASE_REF:$IMPLS_FILE" > /tmp/impls-old.yaml 2>/dev/null || echo "" > /tmp/impls-old.yaml
           cp "$IMPLS_FILE" /tmp/impls-new.yaml
 
+          # Normalize objects before comparing so YAML comments/formatting
+          # don't make unchanged entries look modified.
+          normalize_object() {
+            local file="$1"
+            local query="$2"
+            yq eval -o=json -I=0 "$query" "$file" 2>/dev/null || echo ""
+          }
+
           # Find changed/new implementations
           OLD_IMPLS=$(yq eval '.implementations[].id' /tmp/impls-old.yaml 2>/dev/null | sort || echo "")
           NEW_IMPLS=$(yq eval '.implementations[].id' /tmp/impls-new.yaml 2>/dev/null | sort || echo "")
@@ -91,8 +99,8 @@ runs:
           for impl_id in $NEW_IMPLS; do
             if echo "$OLD_IMPLS" | grep -q "^${impl_id}$"; then
               # Exists in old, check if content changed
-              OLD_IMPL=$(yq eval ".implementations[] | select(.id == \"$impl_id\")" /tmp/impls-old.yaml 2>/dev/null || echo "")
-              NEW_IMPL=$(yq eval ".implementations[] | select(.id == \"$impl_id\")" /tmp/impls-new.yaml 2>/dev/null || echo "")
+              OLD_IMPL=$(normalize_object /tmp/impls-old.yaml ".implementations[] | select(.id == \"$impl_id\")")
+              NEW_IMPL=$(normalize_object /tmp/impls-new.yaml ".implementations[] | select(.id == \"$impl_id\")")
 
               if [ "$OLD_IMPL" != "$NEW_IMPL" ]; then
                 CHANGED_IMPLS="${CHANGED_IMPLS:+$CHANGED_IMPLS|}$impl_id"
@@ -113,8 +121,8 @@ runs:
 
             for relay_id in $NEW_RELAYS; do
               if echo "$OLD_RELAYS" | grep -q "^${relay_id}$"; then
-                OLD_RELAY=$(yq eval ".relays[] | select(.id == \"$relay_id\")" /tmp/impls-old.yaml 2>/dev/null || echo "")
-                NEW_RELAY=$(yq eval ".relays[] | select(.id == \"$relay_id\")" /tmp/impls-new.yaml 2>/dev/null || echo "")
+                OLD_RELAY=$(normalize_object /tmp/impls-old.yaml ".relays[] | select(.id == \"$relay_id\")")
+                NEW_RELAY=$(normalize_object /tmp/impls-new.yaml ".relays[] | select(.id == \"$relay_id\")")
                 if [ "$OLD_RELAY" != "$NEW_RELAY" ]; then
                   CHANGED_RELAYS="${CHANGED_RELAYS:+$CHANGED_RELAYS|}$relay_id"
                   echo "  → Changed relay: $relay_id"
@@ -131,8 +139,8 @@ runs:
 
             for router_id in $NEW_ROUTERS; do
               if echo "$OLD_ROUTERS" | grep -q "^${router_id}$"; then
-                OLD_ROUTER=$(yq eval ".routers[] | select(.id == \"$router_id\")" /tmp/impls-old.yaml 2>/dev/null || echo "")
-                NEW_ROUTER=$(yq eval ".routers[] | select(.id == \"$router_id\")" /tmp/impls-new.yaml 2>/dev/null || echo "")
+                OLD_ROUTER=$(normalize_object /tmp/impls-old.yaml ".routers[] | select(.id == \"$router_id\")")
+                NEW_ROUTER=$(normalize_object /tmp/impls-new.yaml ".routers[] | select(.id == \"$router_id\")")
                 if [ "$OLD_ROUTER" != "$NEW_ROUTER" ]; then
                   CHANGED_ROUTERS="${CHANGED_ROUTERS:+$CHANGED_ROUTERS|}$router_id"
                   echo "  → Changed router: $router_id"
@@ -153,8 +161,8 @@ runs:
             for baseline_id in $NEW_BASELINES; do
               if echo "$OLD_BASELINES" | grep -q "^${baseline_id}$"; then
                 # Exists in old, check if content changed
-                OLD_BASELINE=$(yq eval ".baselines[] | select(.id == \"$baseline_id\")" /tmp/impls-old.yaml 2>/dev/null || echo "")
-                NEW_BASELINE=$(yq eval ".baselines[] | select(.id == \"$baseline_id\")" /tmp/impls-new.yaml 2>/dev/null || echo "")
+                OLD_BASELINE=$(normalize_object /tmp/impls-old.yaml ".baselines[] | select(.id == \"$baseline_id\")")
+                NEW_BASELINE=$(normalize_object /tmp/impls-new.yaml ".baselines[] | select(.id == \"$baseline_id\")")
                 if [ "$OLD_BASELINE" != "$NEW_BASELINE" ]; then
                   CHANGED_BASELINES="${CHANGED_BASELINES:+$CHANGED_BASELINES|}$baseline_id"
                   echo "  → Changed baseline: $baseline_id"
