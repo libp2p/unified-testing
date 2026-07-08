@@ -21,7 +21,7 @@ test-aliases:
   - alias: "js"
     value: "js-v1.x|js-v2.x|js-v3.x"
   - alias: "nim"
-    value: "nim-v1.14"
+    value: "nim-v2.2.0"
   - alias: "jvm"
     value: "jvm-v1.2"
   - alias: "c"
@@ -254,16 +254,15 @@ implementations:
     dialOnly: [wss]
 
   # Nim implementation
-  - id: nim-v1.14
+  - id: nim-v2.2.0
     source:
       type: github
-      repo: status-im/nim-libp2p
-      commit: 0309685cd27d4bf763c8b3be86a76c33bcfe67ea
-      dockerfile: interop/transport/Dockerfile
-    transports: [tcp, ws]
+      repo: vacp2p/nim-libp2p
+      commit: bd689933bddb3e3ef3a3b76cbf3916a328becf7f
+      dockerfile: interop/transport-v2/Dockerfile
+    transports: [tcp, ws, quic-v1]
     secureChannels: [noise]
     muxers: [mplex, yamux]
-    legacy: true
 
   # JVM implementation
   - id: jvm-v1.2
