@@ -5,7 +5,7 @@
 # Usage: --test-select "~linux" or --test-ignore "!~linux"
 test-aliases:
   - alias: "nim"
-    value: "nim-v1.15"
+    value: "nim-v2.2"
   - alias: "failing"
     value: "rust-v0.56 x rust-v0.56"
 
@@ -43,12 +43,12 @@ implementations:
     secureChannels: [noise, tls]
     muxers: [yamux, mplex]
 
-  - id: nim-v1.15
+  - id: nim-v2.2
     source:
       type: github
       repo: vacp2p/nim-libp2p
-      commit: 1bdf2f67971529e8bee01252230bdb00ab785ef7
-      dockerfile: interop/hole-punching/Dockerfile
+      commit: af9651a2d133554921cec52bbd6c4444d3ff06a0
+      dockerfile: interop/hole-punching-v2/Dockerfile
     transports: [tcp]
     secureChannels: [noise]
     muxers: [yamux, mplex]
