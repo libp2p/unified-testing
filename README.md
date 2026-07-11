@@ -1,4 +1,4 @@
-# Unified interoperability, scaling, and performance testing framework for libp2p implementations
+### Unified interoperability, scaling, and performance testing framework for libp2p implementations
 
 [![Made by Protocol Labs](https://img.shields.io/badge/made%20by-Protocol%20Labs-blue.svg?style=flat-square)](http://protocol.ai)
 
@@ -8,7 +8,7 @@ This repository contains:
 * hole-punching tests for libp2p implementations that support AutoNAT, Relaying, and DCUtR protocols
 
 
-## History
+### History
 
 The original version of this testing framework can be found in the [old
 test-plans repo](https://github.com/libp2p/test-plans). Historically, the
