@@ -354,6 +354,7 @@ for relay_id in "${all_relay_ids[@]}"; do
   muxers=$(yq eval ".relays[] | select(.id == \"${relay_id}\") | .muxers | join(\" \")" "${IMAGES_YAML}")
   dial_only=$(yq eval ".relays[] | select(.id == \"${relay_id}\") | .dialOnly | join(\" \")" "${IMAGES_YAML}" 2>/dev/null || echo "")
   commit=$(yq eval ".relays[] | select (.id == \"${relay_id}\") | .source.commit" "${IMAGES_YAML}" 2>/dev/null || echo "")
+  if [ "${commit}" == "null" ]; then commit=""; fi
 
   relay_transports["${relay_id}"]="${transports}"
   relay_secure["${relay_id}"]="${secure}"
@@ -376,6 +377,7 @@ declare -A router_commit
 
 for router_id in "${all_router_ids[@]}"; do
   commit=$(yq eval ".routers[] | select (.id == \"${router_id}\") | .source.commit" "${IMAGES_YAML}" 2>/dev/null || echo "")
+  if [ "${commit}" == "null" ]; then commit=""; fi
 
   if [ -n "${commit}" ] && [ "${commit}" != "null" ]; then
     router_commit["${router_id}"]="${commit}"
@@ -403,6 +405,7 @@ for image_id in "${all_image_ids[@]}"; do
   muxers=$(yq eval ".implementations[] | select(.id == \"${image_id}\") | .muxers | join(\" \")" "${IMAGES_YAML}")
   dial_only=$(yq eval ".implementations[] | select(.id == \"${image_id}\") | .dialOnly | join(\" \")" "${IMAGES_YAML}" 2>/dev/null || echo "")
   commit=$(yq eval ".implementations[] | select (.id == \"${image_id}\") | .source.commit" "${IMAGES_YAML}" 2>/dev/null || echo "")
+  if [ "${commit}" == "null" ]; then commit=""; fi
   legacy=$(yq eval ".implementations[] | select(.id == \"${image_id}\") | .legacy // false" "${IMAGES_YAML}" 2>/dev/null || echo "false")
 
   image_transports["${image_id}"]="${transports}"

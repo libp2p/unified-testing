@@ -1,0 +1,53 @@
+# Build-time firstboot sentinel: if present, rc.firsttime has already run
+# (SSH key generation, ldconfig, sysmerge, etc.) so halt to bake a "warm" image.
+# The sentinel is consumed here and won't exist on subsequent runtime boots.
+if [ -f /etc/firstboot_halt ]; then
+    rm /etc/firstboot_halt
+    echo "rc.local: firstboot tasks complete, halting for build snapshot."
+    halt -p
+    exit 0
+fi
+
+echo "rc.local: Configuring network from config drive..."
+
+# Mount the config drive ISO (CD-ROM)
+mkdir -p /mnt/config
+mount -t cd9660 /dev/cd0a /mnt/config
+
+# Copy dynamic network configuration files
+if [ -f /mnt/config/hostname.vio0 ]; then
+    cp /mnt/config/hostname.vio0 /etc/hostname.vio0
+fi
+if [ -f /mnt/config/hostname.vio1 ]; then
+    cp /mnt/config/hostname.vio1 /etc/hostname.vio1
+fi
+if [ -f /mnt/config/mygate ]; then
+    cp /mnt/config/mygate /etc/mygate
+fi
+
+umount /mnt/config
+
+# Bring up interfaces with the new configuration
+sh /etc/netstart vio0
+sh /etc/netstart vio1
+
+# Add default route
+if [ -f /etc/mygate ]; then
+    route add default $(cat /etc/mygate)
+fi
+
+# Enable IP forwarding
+sysctl net.inet.ip.forwarding=1
+
+# Reload PF rules
+pfctl -f /etc/pf.conf
+
+echo "rc.local: Network configuration complete."
+echo "rc.local: vio0 (WAN):"
+ifconfig vio0
+echo "rc.local: vio1 (LAN):"
+ifconfig vio1
+echo "rc.local: Default route:"
+route -n show | grep default
+echo "rc.local: PF rules:"
+pfctl -sr
