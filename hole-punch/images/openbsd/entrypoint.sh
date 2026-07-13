@@ -131,7 +131,11 @@ echo "Bridges configured: br-wan ($WAN_IF + tap0), br-lan ($LAN_IF + tap1)"
 # FORWARD chain. Disable this for our bridges to prevent packet drops.
 for br in br-wan br-lan; do
     for f in nf_call_iptables nf_call_ip6tables nf_call_arptables; do
-        [ -f "/sys/class/net/$br/bridge/$f" ] && echo 0 > "/sys/class/net/$br/bridge/$f"
+        # Best-effort: /sys is often mounted read-only in unprivileged
+        # containers, so this write can fail. Guard it (like the /proc/sys
+        # loop below) so set -e does not abort the entrypoint. The VM must
+        # still boot even when bridge-nf tuning is unavailable.
+        [ -f "/sys/class/net/$br/bridge/$f" ] && echo 0 > "/sys/class/net/$br/bridge/$f" 2>/dev/null || true
     done
 done
 
