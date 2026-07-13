@@ -15,3 +15,11 @@ implementations:
       vendorDir: dotnet-libp2p
       patchPath: images/dotnet
       patchFile: interop-fix.patch
+  - id: nim
+    imageName: kad-dht-nim
+    # Dev: build a local nim-libp2p checkout. Before pushing, switch to
+    #   source: { type: github, repo: vacp2p/nim-libp2p, commit: <sha>, dockerfile: interop/kad-dht-v2/Dockerfile }
+    source:
+      type: local
+      path: /Users/radoslawkaminski/src/ift/nim-libp2p
+      dockerfile: interop/kad-dht-v2/Dockerfile

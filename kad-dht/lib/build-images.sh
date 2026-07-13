@@ -58,22 +58,69 @@ build_kad_dht_image() {
   local impl_id="$1"
   local force_rebuild="${2:-false}"
 
-  local image_name build_context
-  image_name=$(yq eval ".implementations[] | select(.id == \"${impl_id}\") | .imageName" "${IMAGES_YAML}")
-  build_context=$(yq eval ".implementations[] | select(.id == \"${impl_id}\") | .buildContext" "${IMAGES_YAML}")
+  local q=".implementations[] | select(.id == \"${impl_id}\")"
+  local image_name build_context source_type
+  image_name=$(yq eval "${q} | .imageName" "${IMAGES_YAML}")
+  build_context=$(yq eval "${q} | .buildContext // \"\"" "${IMAGES_YAML}")
+  source_type=$(yq eval "${q} | .source.type // \"\"" "${IMAGES_YAML}")
 
   if [ "${force_rebuild}" != "true" ] && docker_image_exists "${image_name}"; then
     print_success "${image_name} (already built)"
     return 0
   fi
 
-  local repo commit vendor_dir patch_path patch_file
-  repo=$(yq eval ".implementations[] | select(.id == \"${impl_id}\") | .source.repo // \"\"" "${IMAGES_YAML}")
-  commit=$(yq eval ".implementations[] | select(.id == \"${impl_id}\") | .source.commit // \"\"" "${IMAGES_YAML}")
-  vendor_dir=$(yq eval ".implementations[] | select(.id == \"${impl_id}\") | .source.vendorDir // \"\"" "${IMAGES_YAML}")
-  patch_path=$(yq eval ".implementations[] | select(.id == \"${impl_id}\") | .source.patchPath // \"\"" "${IMAGES_YAML}")
-  patch_file=$(yq eval ".implementations[] | select(.id == \"${impl_id}\") | .source.patchFile // \"\"" "${IMAGES_YAML}")
+  # Mode 1: local source — build a local checkout using a Dockerfile inside it
+  # (repo root as build context, like the transport/hole-punch suites). Enables
+  # iterating on a working tree without pushing to GitHub.
+  if [ "${source_type}" == "local" ]; then
+    local local_path dockerfile
+    local_path=$(yq eval "${q} | .source.path" "${IMAGES_YAML}")
+    dockerfile=$(yq eval "${q} | .source.dockerfile" "${IMAGES_YAML}")
+    if [ ! -d "${local_path}" ]; then
+      print_error "Local source path not found: ${local_path}"
+      return 1
+    fi
+    print_message "Building ${image_name} from local ${local_path} (-f ${dockerfile})..."
+    docker build -f "${local_path}/${dockerfile}" -t "${image_name}" "${local_path}" || return 1
+    print_success "${image_name} built"
+    return 0
+  fi
 
+  local repo commit vendor_dir dockerfile patch_path patch_file
+  repo=$(yq eval "${q} | .source.repo // \"\"" "${IMAGES_YAML}")
+  commit=$(yq eval "${q} | .source.commit // \"\"" "${IMAGES_YAML}")
+  vendor_dir=$(yq eval "${q} | .source.vendorDir // \"\"" "${IMAGES_YAML}")
+  dockerfile=$(yq eval "${q} | .source.dockerfile // \"\"" "${IMAGES_YAML}")
+  patch_path=$(yq eval "${q} | .source.patchPath // \"\"" "${IMAGES_YAML}")
+  patch_file=$(yq eval "${q} | .source.patchFile // \"\"" "${IMAGES_YAML}")
+
+  # Mode 2: github source with a Dockerfile inside the repo (no vendorDir) —
+  # clone the repo and build its root, matching the transport/hole-punch model.
+  if [ -n "${repo}" ] && [ "${repo}" != "null" ] \
+     && [ -n "${dockerfile}" ] && [ "${dockerfile}" != "null" ] \
+     && { [ -z "${vendor_dir}" ] || [ "${vendor_dir}" == "null" ]; }; then
+    local work_dir cloned_dir
+    work_dir=$(clone_github_repo_with_submodules "${repo}" "${commit}" "${CACHE_DIR}") || return 1
+    cloned_dir="${work_dir}/$(basename "${repo}")"
+    if [ -n "${patch_path}" ] && [ "${patch_path}" != "null" ] \
+       && [ -n "${patch_file}" ] && [ "${patch_file}" != "null" ]; then
+      apply_patch_if_specified "${cloned_dir}" "${patch_path}" "${patch_file}" || {
+        rm -rf "${work_dir}"
+        return 1
+      }
+    fi
+    print_message "Building ${image_name} from ${repo}@${commit:0:8} (-f ${dockerfile})..."
+    docker build -f "${cloned_dir}/${dockerfile}" -t "${image_name}" "${cloned_dir}" || {
+      rm -rf "${work_dir}"
+      return 1
+    }
+    rm -rf "${work_dir}"
+    print_success "${image_name} built"
+    return 0
+  fi
+
+  # Mode 3/4: github source vendored into the build context (dotnet), or a
+  # plain self-contained build context (py).
   if [ -n "${repo}" ] && [ "${repo}" != "null" ]; then
     if [ -z "${vendor_dir}" ] || [ "${vendor_dir}" == "null" ]; then
       vendor_dir=$(basename "${repo}")
