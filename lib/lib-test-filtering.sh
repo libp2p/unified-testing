@@ -43,6 +43,7 @@ get_common() {
     # For each remaining list, keep only items that appear in it
     for list in "$@"; do
         local -A current_list_map
+        current_list_map=()
 
         # Build a map of items in current list
         for item in ${list}; do
