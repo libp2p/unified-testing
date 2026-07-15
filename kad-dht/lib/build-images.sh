@@ -84,13 +84,6 @@ build_kad_dht_image() {
     local work_dir cloned_dir
     work_dir=$(clone_github_repo_with_submodules "${repo}" "${commit}" "${CACHE_DIR}") || return 1
     cloned_dir="${work_dir}/$(basename "${repo}")"
-    if [ -n "${patch_path}" ] && [ "${patch_path}" != "null" ] \
-       && [ -n "${patch_file}" ] && [ "${patch_file}" != "null" ]; then
-      apply_patch_if_specified "${cloned_dir}" "${patch_path}" "${patch_file}" || {
-        rm -rf "${work_dir}"
-        return 1
-      }
-    fi
     print_message "Building ${image_name} from ${repo}@${commit:0:8} (-f ${dockerfile})..."
     docker build -f "${cloned_dir}/${dockerfile}" -t "${image_name}" "${cloned_dir}" || {
       rm -rf "${work_dir}"
