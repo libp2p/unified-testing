@@ -59,6 +59,11 @@ on:
         required: false
         default: false
         type: boolean
+      timeout:
+        description: 'Max seconds per test before harness abort'
+        required: false
+        default: 300
+        type: number
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -78,6 +83,7 @@ jobs:
       debug: ${{ steps.resolve.outputs.debug }}
       snapshot: ${{ steps.resolve.outputs.snapshot }}
       export-docker-images: ${{ steps.resolve.outputs.export-docker-images }}
+      timeout: ${{ steps.resolve.outputs.timeout }}
       should-run-tests: ${{ steps.resolve.outputs.should-run-tests }}
     steps:
       - name: Checkout code
@@ -108,6 +114,7 @@ jobs:
             echo "debug=${{ github.event.inputs.debug }}" >> $GITHUB_OUTPUT
             echo "snapshot=${{ github.event.inputs.snapshot }}" >> $GITHUB_OUTPUT
             echo "export-docker-images=${{ github.event.inputs.export-docker-images }}" >> $GITHUB_OUTPUT
+            echo "timeout=${{ github.event.inputs.timeout }}" >> $GITHUB_OUTPUT
             echo "should-run-tests=true" >> $GITHUB_OUTPUT
             echo "→ Manual trigger: using workflow inputs"
           else
@@ -120,14 +127,25 @@ jobs:
             echo "test-ignore=~failing" >> $GITHUB_OUTPUT
 
             CHANGED_BASELINES="${{ steps.detect.outputs.changed-baselines }}"
+            CHANGED_IMPLS="${{ steps.detect.outputs.changed-impls }}"
             if [ -z "$CHANGED_BASELINES" ]; then
               echo "baseline-select=~default_baselines" >> $GITHUB_OUTPUT
             else
               echo "baseline-select=$CHANGED_BASELINES" >> $GITHUB_OUTPUT
             fi
 
-            # Same rule for baselines: avoid negating selected values.
-            echo "baseline-ignore=~failing" >> $GITHUB_OUTPUT
+            # Skip baseline builds/tests on impl-only PRs to save runner disk/time.
+            if [ -z "$CHANGED_BASELINES" ] && [ -n "$CHANGED_IMPLS" ]; then
+              echo "baseline-ignore=~baselines" >> $GITHUB_OUTPUT
+            else
+              echo "baseline-ignore=~failing" >> $GITHUB_OUTPUT
+            fi
+
+            if echo "$CHANGED_IMPLS" | grep -q 'python'; then
+              echo "timeout=900" >> $GITHUB_OUTPUT
+            else
+              echo "timeout=300" >> $GITHUB_OUTPUT
+            fi
 
             echo "iterations=10" >> $GITHUB_OUTPUT
             echo "force-matrix-rebuild=${{ steps.detect.outputs.impls-yaml-changed }}" >> $GITHUB_OUTPUT
@@ -167,3 +185,4 @@ jobs:
           force-matrix-rebuild: ${{ needs.resolve-parameters.outputs.force-matrix-rebuild }}
           force-image-rebuild: ${{ needs.resolve-parameters.outputs.force-image-rebuild }}
           debug: ${{ needs.resolve-parameters.outputs.debug }}
+          timeout: '${{ needs.resolve-parameters.outputs.timeout }}'

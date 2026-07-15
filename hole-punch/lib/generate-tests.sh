@@ -360,7 +360,7 @@ for relay_id in "${all_relay_ids[@]}"; do
   relay_secure["${relay_id}"]="${secure}"
   relay_muxers["${relay_id}"]="${muxers}"
   relay_dial_only["${relay_id}"]="${dial_only}"
-  if [ -n "${commit}" ]; then
+  if [ -n "${commit}" ] && [ "${commit}" != "null" ]; then
     relay_commit["${relay_id}"]="${commit}"
   fi
 done
@@ -379,7 +379,7 @@ for router_id in "${all_router_ids[@]}"; do
   commit=$(yq eval ".routers[] | select (.id == \"${router_id}\") | .source.commit" "${IMAGES_YAML}" 2>/dev/null || echo "")
   if [ "${commit}" == "null" ]; then commit=""; fi
 
-  if [ -n "${commit}" ]; then
+  if [ -n "${commit}" ] && [ "${commit}" != "null" ]; then
     router_commit["${router_id}"]="${commit}"
   fi
 done
@@ -412,7 +412,7 @@ for image_id in "${all_image_ids[@]}"; do
   image_secure["${image_id}"]="${secure}"
   image_muxers["${image_id}"]="${muxers}"
   image_dial_only["${image_id}"]="${dial_only}"
-  if [ -n "${commit}" ]; then
+  if [ -n "${commit}" ] && [ "${commit}" != "null" ]; then
     image_commit["${image_id}"]="${commit}"
   fi
   image_legacy["${image_id}"]="${legacy}"

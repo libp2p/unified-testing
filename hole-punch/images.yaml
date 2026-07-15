@@ -4,6 +4,8 @@
 # Test Aliases - Define reusable patterns for test selection
 # Usage: --test-select "~linux" or --test-ignore "!~linux"
 test-aliases:
+  - alias: "nim"
+    value: "nim-v2.2"
   - alias: "failing"
     value: ""
   - alias: "python"
@@ -15,11 +17,6 @@ routers:
     source:
       type: local
       path: images/linux
-      dockerfile: Dockerfile
-  - id: openbsd
-    source:
-      type: local
-      path: images/openbsd
       dockerfile: Dockerfile
 
 # Relay configurations - Multiple relay types for testing different implementations
@@ -53,7 +50,7 @@ implementations:
     secureChannels: [noise, tls]
     muxers: [yamux, mplex]
 
-  - id: py-v0.6
+  - id: py-v0.7
     source:
       type: local
       path: images/python/v0.6
@@ -61,3 +58,12 @@ implementations:
     transports: [tcp, ws]
     secureChannels: [noise, tls]
     muxers: [yamux]
+  - id: nim-v2.2
+    source:
+      type: github
+      repo: vacp2p/nim-libp2p
+      commit: af9651a2d133554921cec52bbd6c4444d3ff06a0
+      dockerfile: interop/hole-punching-v2/Dockerfile
+    transports: [tcp]
+    secureChannels: [noise]
+    muxers: [yamux, mplex]

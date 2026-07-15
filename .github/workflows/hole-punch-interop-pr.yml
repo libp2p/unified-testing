@@ -128,9 +128,9 @@ jobs:
             # Automatic trigger - use change detection outputs
             echo "test-select=${{ steps.detect.outputs.changed-impls }}" >> $GITHUB_OUTPUT
 
-            # Keep only the known failing filter. test-select already scopes
-            # to changed implementations, so adding negated impl patterns here
-            # would conflict and can yield zero selected tests.
+            # Always include ~failing to skip known-broken tests.
+            # Do NOT add negated implementation patterns to test-ignore here -
+            # that conflicts with test-select and can result in 0 selected tests.
             echo "test-ignore=~failing" >> $GITHUB_OUTPUT
 
             echo "relay-select=${{ steps.detect.outputs.changed-relays }}" >> $GITHUB_OUTPUT
