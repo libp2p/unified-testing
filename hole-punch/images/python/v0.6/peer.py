@@ -263,8 +263,10 @@ class HolePunchPeer:
         self.transport = os.getenv("TRANSPORT", "tcp")
         self.secure_channel = os.getenv("SECURE_CHANNEL")  # May be None for QUIC
         self.muxer = os.getenv("MUXER")  # May be None for QUIC
-        self.peer_ip = os.getenv("PEER_IP", "0.0.0.0")
-        self.router_ip = os.getenv("ROUTER_IP")
+        self.peer_ip = os.getenv("DIALER_IP") if self.is_dialer else os.getenv("LISTENER_IP")
+        if not self.peer_ip:
+            self.peer_ip = os.getenv("PEER_IP", "0.0.0.0")
+        self.router_ip = os.getenv("WAN_ROUTER_IP") or os.getenv("ROUTER_IP")
         self.debug = os.getenv("DEBUG", "false").lower() == "true"
 
         # Validate required env vars
@@ -354,6 +356,20 @@ class HolePunchPeer:
                     await trio.sleep(1)
         raise RuntimeError("Failed to connect to Redis after 10 attempts")
 
+    def patch_host_addrs(self):
+        orig_get_addrs = self.host.get_addrs
+        def patched_get_addrs():
+            addrs = orig_get_addrs()
+            if self.router_ip:
+                old_ip = self.peer_ip
+                self.peer_ip = self.router_ip
+                router_addr = self.create_listen_address(4001)
+                self.peer_ip = old_ip
+                if router_addr not in addrs:
+                    addrs.append(router_addr)
+            return addrs
+        self.host.get_addrs = patched_get_addrs
+
     async def run_listener(self):
         """Run as listener (IS_DIALER=false)."""
         print("Starting as LISTENER...", file=sys.stderr)
@@ -373,6 +389,7 @@ class HolePunchPeer:
             enable_quic=(self.transport == "quic-v1"),
             listen_addrs=[listen_addr],
         )
+        self.patch_host_addrs()
 
         limits = RelayLimits(
             duration=3600,
@@ -467,6 +484,7 @@ class HolePunchPeer:
 
                     # Publish our peer ID to Redis only AFTER reserving so the dialer
                     # can be sure the relay is ready to forward traffic to us.
+                    await trio.sleep(2)  # Wait 2s for relay to process reservation
                     redis_key = f"{self.test_key}_listener_peer_id"
                     self.redis_client.set(redis_key, peer_id)
                     print(f"Published peer ID to Redis key: {redis_key}", file=sys.stderr)
@@ -497,6 +515,7 @@ class HolePunchPeer:
             enable_quic=(self.transport == "quic-v1"),
             listen_addrs=[listen_addr],
         )
+        self.patch_host_addrs()
 
         # Configure relay client.
         # CLIENT enabled: the transport sends RESERVE then CONNECT on the same HOP stream.
