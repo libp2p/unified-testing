@@ -354,13 +354,12 @@ for relay_id in "${all_relay_ids[@]}"; do
   muxers=$(yq eval ".relays[] | select(.id == \"${relay_id}\") | .muxers | join(\" \")" "${IMAGES_YAML}")
   dial_only=$(yq eval ".relays[] | select(.id == \"${relay_id}\") | .dialOnly | join(\" \")" "${IMAGES_YAML}" 2>/dev/null || echo "")
   commit=$(yq eval ".relays[] | select (.id == \"${relay_id}\") | .source.commit" "${IMAGES_YAML}" 2>/dev/null || echo "")
-  if [ "${commit}" == "null" ]; then commit=""; fi
 
   relay_transports["${relay_id}"]="${transports}"
   relay_secure["${relay_id}"]="${secure}"
   relay_muxers["${relay_id}"]="${muxers}"
   relay_dial_only["${relay_id}"]="${dial_only}"
-  if [ -n "${commit}" ] && [ "${commit}" != "null" ]; then
+  if [ -n "${commit}" ]; then
     relay_commit["${relay_id}"]="${commit}"
   fi
 done
@@ -377,9 +376,8 @@ declare -A router_commit
 
 for router_id in "${all_router_ids[@]}"; do
   commit=$(yq eval ".routers[] | select (.id == \"${router_id}\") | .source.commit" "${IMAGES_YAML}" 2>/dev/null || echo "")
-  if [ "${commit}" == "null" ]; then commit=""; fi
 
-  if [ -n "${commit}" ] && [ "${commit}" != "null" ]; then
+  if [ -n "${commit}" ]; then
     router_commit["${router_id}"]="${commit}"
   fi
 done
@@ -405,14 +403,13 @@ for image_id in "${all_image_ids[@]}"; do
   muxers=$(yq eval ".implementations[] | select(.id == \"${image_id}\") | .muxers | join(\" \")" "${IMAGES_YAML}")
   dial_only=$(yq eval ".implementations[] | select(.id == \"${image_id}\") | .dialOnly | join(\" \")" "${IMAGES_YAML}" 2>/dev/null || echo "")
   commit=$(yq eval ".implementations[] | select (.id == \"${image_id}\") | .source.commit" "${IMAGES_YAML}" 2>/dev/null || echo "")
-  if [ "${commit}" == "null" ]; then commit=""; fi
   legacy=$(yq eval ".implementations[] | select(.id == \"${image_id}\") | .legacy // false" "${IMAGES_YAML}" 2>/dev/null || echo "false")
 
   image_transports["${image_id}"]="${transports}"
   image_secure["${image_id}"]="${secure}"
   image_muxers["${image_id}"]="${muxers}"
   image_dial_only["${image_id}"]="${dial_only}"
-  if [ -n "${commit}" ] && [ "${commit}" != "null" ]; then
+  if [ -n "${commit}" ]; then
     image_commit["${image_id}"]="${commit}"
   fi
   image_legacy["${image_id}"]="${legacy}"
@@ -682,7 +679,7 @@ generate_tests_worker() {
       id: ${dialer_id}
       imageName: ${dialer_image_name}
 EOF
-                  if [ -n "${dialer_commit}" ]; then
+                  if [ -n "${dialer_commit}" ] && [ "${dialer_commit}" != "null" ]; then
                     echo "      snapshot: snapshots/${dialer_commit}.zip" >> "${worker_selected}"
                   fi
                   if [ "${dialer_legacy}" == "true" ]; then
@@ -693,7 +690,7 @@ EOF
       id: ${listener_id}
       imageName: ${listener_image_name}
 EOF
-                  if [ -n "${listener_commit}" ]; then
+                  if [ -n "${listener_commit}" ] && [ "${listener_commit}" != "null" ]; then
                     echo "      snapshot: snapshots/${listener_commit}.zip" >> "${worker_selected}"
                   fi
                   if [ "${listener_legacy}" == "true" ]; then
@@ -704,7 +701,7 @@ EOF
       id: ${relay_id}
       imageName: ${relay_image_name}
 EOF
-                  if [ -n "${relay_commit}" ]; then
+                  if [ -n "${relay_commit}" ] && [ "${relay_commit}" != "null" ]; then
                     echo "      snapshot: snapshots/${relay_commit}.zip" >> "${worker_selected}"
                   fi
                   cat >> "${worker_selected}" <<EOF
@@ -712,7 +709,7 @@ EOF
       id: ${dialer_router_id}
       imageName: ${dialer_router_image_name}
 EOF
-                  if [ -n "${dialer_router_commit}" ]; then
+                  if [ -n "${dialer_router_commit}" ] && [ "${dialer_router_commit}" != "null" ]; then
                     echo "      snapshot: snapshots/${dialer_router_commit}.zip" >> "${worker_selected}"
                   fi
                   cat >> "${worker_selected}" <<EOF
@@ -720,7 +717,7 @@ EOF
       id: ${listener_router_id}
       imageName: ${listener_router_image_name}
 EOF
-                  if [ -n "${listener_router_commit}" ]; then
+                  if [ -n "${listener_router_commit}" ] && [ "${listener_router_commit}" != "null" ]; then
                     echo "      snapshot: snapshots/${listener_router_commit}.zip" >> "${worker_selected}"
                   fi
 
@@ -739,7 +736,7 @@ EOF
       id: ${dialer_id}
       imageName: ${dialer_image_name}
 EOF
-                  if [ -n "${dialer_commit}" ]; then
+                  if [ -n "${dialer_commit}" ] && [ "${dialer_commit}" != "null" ]; then
                     echo "      snapshot: snapshots/${dialer_commit}.zip" >> "${worker_ignored}"
                   fi
                   if [ "${dialer_legacy}" == "true" ]; then
@@ -750,7 +747,7 @@ EOF
       id: ${listener_id}
       imageName: ${listener_image_name}
 EOF
-                  if [ -n "${listener_commit}" ]; then
+                  if [ -n "${listener_commit}" ] && [ "${listener_commit}" != "null" ]; then
                     echo "      snapshot: snapshots/${listener_commit}.zip" >> "${worker_ignored}"
                   fi
                   if [ "${listener_legacy}" == "true" ]; then
@@ -761,7 +758,7 @@ EOF
       id: ${relay_id}
       imageName: ${relay_image_name}
 EOF
-                  if [ -n "${relay_commit}" ]; then
+                  if [ -n "${relay_commit}" ] && [ "${relay_commit}" != "null" ]; then
                     echo "      snapshot: snapshots/${relay_commit}.zip" >> "${worker_ignored}"
                   fi
                   cat >> "${worker_ignored}" <<EOF
@@ -769,7 +766,7 @@ EOF
       id: ${dialer_router_id}
       imageName: ${dialer_router_image_name}
 EOF
-                  if [ -n "${dialer_router_commit}" ]; then
+                  if [ -n "${dialer_router_commit}" ] && [ "${dialer_router_commit}" != "null" ]; then
                     echo "      snapshot: snapshots/${dialer_router_commit}.zip" >> "${worker_ignored}"
                   fi
                   cat >> "${worker_ignored}" <<EOF
@@ -777,7 +774,7 @@ EOF
       id: ${listener_router_id}
       imageName: ${listener_router_image_name}
 EOF
-                  if [ -n "${listener_router_commit}" ]; then
+                  if [ -n "${listener_router_commit}" ] && [ "${listener_router_commit}" != "null" ]; then
                     echo "      snapshot: snapshots/${listener_router_commit}.zip" >> "${worker_ignored}"
                   fi
                 fi
@@ -864,7 +861,7 @@ EOF
       id: ${dialer_id}
       imageName: ${dialer_image_name}
 EOF
-                      if [ -n "${dialer_commit}" ]; then
+                      if [ -n "${dialer_commit}" ] && [ "${dialer_commit}" != "null" ]; then
                         echo "      snapshot: snapshots/${dialer_commit}.zip" >> "${worker_selected}"
                       fi
                       if [ "${dialer_legacy}" == "true" ]; then
@@ -875,7 +872,7 @@ EOF
       id: ${listener_id}
       imageName: ${listener_image_name}
 EOF
-                      if [ -n "${listener_commit}" ]; then
+                      if [ -n "${listener_commit}" ] && [ "${listener_commit}" != "null" ]; then
                         echo "      snapshot: snapshots/${listener_commit}.zip" >> "${worker_selected}"
                       fi
                       if [ "${listener_legacy}" == "true" ]; then
@@ -886,7 +883,7 @@ EOF
       id: ${relay_id}
       imageName: ${relay_image_name}
 EOF
-                      if [ -n "${relay_commit}" ]; then
+                      if [ -n "${relay_commit}" ] && [ "${relay_commit}" != "null" ]; then
                         echo "      snapshot: snapshots/${relay_commit}.zip" >> "${worker_selected}"
                       fi
                       cat >> "${worker_selected}" <<EOF
@@ -894,7 +891,7 @@ EOF
       id: ${dialer_router_id}
       imageName: ${dialer_router_image_name}
 EOF
-                      if [ -n "${dialer_router_commit}" ]; then
+                      if [ -n "${dialer_router_commit}" ] && [ "${dialer_router_commit}" != "null" ]; then
                         echo "      snapshot: snapshots/${dialer_router_commit}.zip" >> "${worker_selected}"
                       fi
                       cat >> "${worker_selected}" <<EOF
@@ -902,7 +899,7 @@ EOF
       id: ${listener_router_id}
       imageName: ${listener_router_image_name}
 EOF
-                      if [ -n "${listener_router_commit}" ]; then
+                      if [ -n "${listener_router_commit}" ] && [ "${listener_router_commit}" != "null" ]; then
                         echo "      snapshot: snapshots/${listener_router_commit}.zip" >> "${worker_selected}"
                       fi
                     else
@@ -919,7 +916,7 @@ EOF
       id: ${dialer_id}
       imageName: ${dialer_image_name}
 EOF
-                      if [ -n "${dialer_commit}" ]; then
+                      if [ -n "${dialer_commit}" ] && [ "${dialer_commit}" != "null" ]; then
                         echo "      snapshot: snapshots/${dialer_commit}.zip" >> "${worker_ignored}"
                       fi
                       if [ "${dialer_legacy}" == "true" ]; then
@@ -930,7 +927,7 @@ EOF
       id: ${listener_id}
       imageName: ${listener_image_name}
 EOF
-                      if [ -n "${listener_commit}" ]; then
+                      if [ -n "${listener_commit}" ] && [ "${listener_commit}" != "null" ]; then
                         echo "      snapshot: snapshots/${listener_commit}.zip" >> "${worker_ignored}"
                       fi
                       if [ "${listener_legacy}" == "true" ]; then
@@ -941,7 +938,7 @@ EOF
       id: ${relay_id}
       imageName: ${relay_image_name}
 EOF
-                      if [ -n "${relay_commit}" ]; then
+                      if [ -n "${relay_commit}" ] && [ "${relay_commit}" != "null" ]; then
                         echo "      snapshot: snapshots/${relay_commit}.zip" >> "${worker_ignored}"
                       fi
                       cat >> "${worker_ignored}" <<EOF
@@ -949,7 +946,7 @@ EOF
       id: ${dialer_router_id}
       imageName: ${dialer_router_image_name}
 EOF
-                      if [ -n "${dialer_router_commit}" ]; then
+                      if [ -n "${dialer_router_commit}" ] && [ "${dialer_router_commit}" != "null" ]; then
                         echo "      snapshot: snapshots/${dialer_router_commit}.zip" >> "${worker_ignored}"
                       fi
                       cat >> "${worker_ignored}" <<EOF
@@ -957,7 +954,7 @@ EOF
       id: ${listener_router_id}
       imageName: ${listener_router_image_name}
 EOF
-                      if [ -n "${listener_router_commit}" ]; then
+                      if [ -n "${listener_router_commit}" ] && [ "${listener_router_commit}" != "null" ]; then
                         echo "      snapshot: snapshots/${listener_router_commit}.zip" >> "${worker_ignored}"
                       fi
                     fi
