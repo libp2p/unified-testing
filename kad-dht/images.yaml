@@ -20,5 +20,5 @@ implementations:
     source:
       type: github
       repo: vacp2p/nim-libp2p
-      commit: c1b82471dc6cbb2076f9839ea33fc696d487579c
+      commit: 8a7b54e0ff9e10b521dc0b4115d57d2d5a9404cd
       dockerfile: interop/kad-dht-v2/Dockerfile
