@@ -8,6 +8,8 @@ test-aliases:
     value: "nim-v2.2"
   - alias: "failing"
     value: ""
+  - alias: "python"
+    value: "py-v0.6"
 
 # Router configurations - Multiple router types for testing different NAT implementations
 routers:
@@ -28,6 +30,15 @@ relays:
     secureChannels: [noise, tls]
     muxers: [yamux, mplex]
 
+  - id: py-v0.6
+    source:
+      type: local
+      path: images/python/v0.6
+      dockerfile: Dockerfile.relay
+    transports: [tcp, ws]
+    secureChannels: [noise, tls]
+    muxers: [yamux]
+
 # Implementation definitions
 implementations:
   - id: rust-v0.56
@@ -39,6 +50,14 @@ implementations:
     secureChannels: [noise, tls]
     muxers: [yamux, mplex]
 
+  - id: py-v0.7
+    source:
+      type: local
+      path: images/python/v0.6
+      dockerfile: Dockerfile.peer
+    transports: [tcp, ws]
+    secureChannels: [noise, tls]
+    muxers: [yamux]
   - id: nim-v2.2
     source:
       type: github
