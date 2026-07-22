@@ -8,6 +8,7 @@ from libp2p import new_host
 from libp2p.crypto.ed25519 import create_new_key_pair
 from libp2p.tools.utils import info_from_p2p_addr
 from libp2p.kad_dht.kad_dht import DHTMode, KadDHT
+from libp2p.kad_dht.peer_routing import PeerRouting
 from libp2p.tools.async_service.trio_service import background_trio_service
 from libp2p.records.validator import Validator
 from multiaddr import Multiaddr
@@ -17,6 +18,22 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# Interop workaround: PeerRouting.find_closest_peers_network neither skips the
+# local peer id nor bounds each query with a timeout. When a peer returns the
+# local id in closerPeers, the walk dials itself and blocks forever on a
+# FIND_NODE reply that a client-mode DHT never sends, hanging the lookup.
+# Skip self before querying.
+_orig_query_single_peer_for_closest = PeerRouting._query_single_peer_for_closest
+
+
+async def _query_single_peer_for_closest_skip_self(self, peer, target_key, new_peers):
+    if peer == self.host.get_id():
+        return
+    await _orig_query_single_peer_for_closest(self, peer, target_key, new_peers)
+
+
+PeerRouting._query_single_peer_for_closest = _query_single_peer_for_closest_skip_self
 
 class TestValidator(Validator):
     def validate(self, key: str, value: bytes) -> None:

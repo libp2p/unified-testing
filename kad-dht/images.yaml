@@ -15,3 +15,10 @@ implementations:
       vendorDir: dotnet-libp2p
       patchPath: images/dotnet
       patchFile: interop-fix.patch
+  - id: nim
+    imageName: kad-dht-nim
+    source:
+      type: github
+      repo: vacp2p/nim-libp2p
+      commit: 8a7b54e0ff9e10b521dc0b4115d57d2d5a9404cd
+      dockerfile: interop/kad-dht-v2/Dockerfile
