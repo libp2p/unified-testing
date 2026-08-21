@@ -66,7 +66,11 @@ SUBNET_ID_1=$(( (16#${TEST_KEY:0:2} % 224 ) + 32 ))
 SUBNET_ID_2=$(( (16#${TEST_KEY:2:2} % 224 ) + 32 ))
 
 # Calculate network addresses
-WAN_SUBNET="10.${SUBNET_ID_1}.${SUBNET_ID_2}.64/27"
+#
+# The WAN stands in for the public internet and needs globally routable space.
+## 11.0.0.0/8 is allocated but unannounced.
+WAN_PREFIX="${WAN_PREFIX:-11}"
+WAN_SUBNET="${WAN_PREFIX}.${SUBNET_ID_1}.${SUBNET_ID_2}.64/27"
 DIALER_LAN_SUBNET="10.${SUBNET_ID_1}.${SUBNET_ID_2}.96/27"
 LISTENER_LAN_SUBNET="10.${SUBNET_ID_1}.${SUBNET_ID_2}.128/27"
 
@@ -76,12 +80,12 @@ print_debug "listener LAN subnet: ${LISTENER_LAN_SUBNET}"
 
 # Calculate fixed IP addresses
 # Note: Docker auto-assigns first usable IP (.65, .97, .129) to bridge gateway
-RELAY_IP="10.${SUBNET_ID_1}.${SUBNET_ID_2}.68"
+RELAY_IP="${WAN_PREFIX}.${SUBNET_ID_1}.${SUBNET_ID_2}.68"
 DIALER_IP="10.${SUBNET_ID_1}.${SUBNET_ID_2}.99"
 LISTENER_IP="10.${SUBNET_ID_1}.${SUBNET_ID_2}.131"
-DIALER_ROUTER_WAN_IP="10.${SUBNET_ID_1}.${SUBNET_ID_2}.66"
+DIALER_ROUTER_WAN_IP="${WAN_PREFIX}.${SUBNET_ID_1}.${SUBNET_ID_2}.66"
 DIALER_ROUTER_LAN_IP="10.${SUBNET_ID_1}.${SUBNET_ID_2}.98"
-LISTENER_ROUTER_WAN_IP="10.${SUBNET_ID_1}.${SUBNET_ID_2}.67"
+LISTENER_ROUTER_WAN_IP="${WAN_PREFIX}.${SUBNET_ID_1}.${SUBNET_ID_2}.67"
 LISTENER_ROUTER_LAN_IP="10.${SUBNET_ID_1}.${SUBNET_ID_2}.130"
 
 print_debug "relay IP: ${RELAY_IP}"
