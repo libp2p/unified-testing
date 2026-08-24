@@ -36,9 +36,11 @@ fi
 
 # Generate LATEST_TEST_RESULTS.md (detailed results)
 cat > "$LATEST_RESULTS_FILE" <<EOF
-# Hole Punch Interoperability Test Results
+# Hole Punch (DCUtR) Interoperability Test Results
 
 ## Test Pass: \`$test_pass\`
+
+**Method:** DCUtR (Direct Connection Upgrade through Relay) over Circuit Relay v2. The transport sets the punch mechanics: TCP simultaneous open, QUIC synchronised dial.
 
 **Summary:**
 - **Total Tests:** $total
@@ -60,28 +62,33 @@ cat > "$LATEST_RESULTS_FILE" <<EOF
 
 ## Test Results
 
-| Test | Dialer | Listener | Transport | Status | Duration |
-|------|--------|----------|-----------|--------|----------|
+| Test | Dialer | Listener | Transport | Relay | Status | Duration |
+|------|--------|----------|-----------|-------|--------|----------|
 EOF
 
 # Read test count
 TEST_COUNT=$(yq eval '.tests | length' "$RESULTS_FILE")
 
-# Declare associative arrays for fast lookups in matrix generation
-declare -A test_status_map
-declare -A test_transport_map
+# Per-relay tallies for the summary and the matrix cells keyed by
+# relay|dialer|listener, both filled in the single pass below.
+declare -A relay_total
+declare -A relay_pass
+declare -A relay_fail
+declare -A matrix_cell
 
 # Only process tests if there are any
 if [ "$TEST_COUNT" -gt 0 ]; then
     # Export all test data as TSV in one yq call (much faster than individual calls)
-    test_data=$(yq eval '.tests[] | [.name, .status, .dialer, .listener, .transport, .duration] | @tsv' "$RESULTS_FILE")
+    test_data=$(yq eval '.tests[] | [.name, .status, .dialer, .listener, .transport, .relay, .duration] | @tsv' "$RESULTS_FILE")
 
-    # Process each test and build both the table and hash maps
-    while IFS=$'\t' read -r name status dialer listener transport test_duration; do
+    # Process each test and build the detailed table, the per-relay tallies,
+    # and the matrix cells in one pass.
+    while IFS=$'\t' read -r name status dialer listener transport relay test_duration; do
 
-        # Store in hash maps for later matrix lookup
-        test_status_map["$name"]="$status"
-        test_transport_map["$name"]="$transport"
+        # A suite without a relay axis reports the field as "null".
+        if [ -z "$relay" ] || [ "$relay" == "null" ]; then
+            relay="-"
+        fi
 
         # Status icon
         if [ "$status" == "pass" ]; then
@@ -90,7 +97,20 @@ if [ "$TEST_COUNT" -gt 0 ]; then
             status_icon="❌"
         fi
 
-        echo "| $name | $dialer | $listener | $transport | $status_icon | $test_duration |" >> "$LATEST_RESULTS_FILE"
+        # Per-relay tallies
+        relay_total["$relay"]=$(( ${relay_total["$relay"]:-0} + 1 ))
+        if [ "$status" == "pass" ]; then
+            relay_pass["$relay"]=$(( ${relay_pass["$relay"]:-0} + 1 ))
+        else
+            relay_fail["$relay"]=$(( ${relay_fail["$relay"]:-0} + 1 ))
+        fi
+
+        # Matrix cell: append this test's icon and transport initial to the
+        # relay|dialer|listener bucket.
+        cell_key="${relay}|${dialer}|${listener}"
+        matrix_cell["$cell_key"]="${matrix_cell["$cell_key"]:-}${status_icon}${transport:0:1} "
+
+        echo "| $name | $dialer | $listener | $transport | $relay | $status_icon | $test_duration |" >> "$LATEST_RESULTS_FILE"
     done <<< "$test_data"
 fi
 
@@ -106,9 +126,11 @@ echo "  ✓ Generated $LATEST_RESULTS_FILE"
 
 # Generate main results.md (with matrix)
 cat > "$OUTPUT_FILE" <<EOF
-# Hole Punch Interoperability Test Results
+# Hole Punch (DCUtR) Interoperability Test Results
 
 ## Test Pass: \`$test_pass\`
+
+**Method:** DCUtR (Direct Connection Upgrade through Relay) over Circuit Relay v2. The transport sets the punch mechanics: TCP simultaneous open, QUIC synchronised dial.
 
 **Summary:**
 - **Total Tests:** $total
@@ -125,6 +147,34 @@ cat > "$OUTPUT_FILE" <<EOF
 **Timestamps:**
 - **Started:** $STARTED_AT
 - **Completed:** $COMPLETED_AT
+
+---
+
+## Results by Relay
+
+EOF
+
+# Per-relay summary table. Every cell in the suite is relayed, so this splits
+# the headline pass rate by which relay carried it.
+if [ "$TEST_COUNT" -gt 0 ]; then
+    {
+        echo "| Relay | Total | Passed | Failed | Pass Rate |"
+        echo "|-------|-------|--------|--------|-----------|"
+        for relay in $(printf '%s\n' "${!relay_total[@]}" | sort); do
+            r_total="${relay_total["$relay"]:-0}"
+            r_pass="${relay_pass["$relay"]:-0}"
+            r_fail="${relay_fail["$relay"]:-0}"
+            if [ "$r_total" -gt 0 ]; then
+                r_rate=$(awk "BEGIN {printf \"%.1f\", ($r_pass / $r_total) * 100}")
+            else
+                r_rate="0.0"
+            fi
+            echo "| $relay | $r_total | ✅ $r_pass | ❌ $r_fail | ${r_rate}% |"
+        done
+    } >> "$OUTPUT_FILE"
+fi
+
+cat >> "$OUTPUT_FILE" <<EOF
 
 ---
 
@@ -147,64 +197,42 @@ See [Latest Test Results](LATEST_TEST_RESULTS.md) for detailed results table.
 
 EOF
 
-# Only generate matrix view if there are tests
+# One dialer x listener grid per relay, so a pair's outcome through each relay
+# is shown side by side rather than collapsed onto one square.
 if [ "$TEST_COUNT" -gt 0 ]; then
-    # Generate matrix view (dialer x listener grid)
-    # Get unique dialers and listeners
     dialers=$(yq eval '.tests[].dialer' "$RESULTS_FILE" | sort -u)
     listeners=$(yq eval '.tests[].listener' "$RESULTS_FILE" | sort -u)
 
-# Create header row
-echo -n "| Dialer \\ Listener |" >> "$OUTPUT_FILE"
-for listener in $listeners; do
-    echo -n " $listener |" >> "$OUTPUT_FILE"
-done
-echo "" >> "$OUTPUT_FILE"
+    for relay in $(printf '%s\n' "${!relay_total[@]}" | sort); do
+        echo "### Relay: $relay" >> "$OUTPUT_FILE"
+        echo "" >> "$OUTPUT_FILE"
 
-# Create separator row
-echo -n "|---|" >> "$OUTPUT_FILE"
-for listener in $listeners; do
-    echo -n "---|" >> "$OUTPUT_FILE"
-done
-echo "" >> "$OUTPUT_FILE"
-
-# Create data rows
-for dialer in $dialers; do
-    echo -n "| **$dialer** |" >> "$OUTPUT_FILE"
-
-    for listener in $listeners; do
-        # Find tests for this combination using hash map lookups
-        result=""
-
-        # Try all possible transport combinations using hash map lookups (O(1) instead of O(n))
-        # This is much faster than searching through all tests linearly
-        for transport in "tcp" "quic" "quic-v1" "ws" "wss" "webrtc" "webrtc-direct" "webtransport"; do
-            test_name="$dialer x $listener ($transport)"
-
-            # O(1) hash map lookup instead of O(n) linear search
-            if [ -n "${test_status_map[$test_name]:-}" ]; then
-                test_status="${test_status_map[$test_name]}"
-                test_transport="${test_transport_map[$test_name]}"
-
-                if [ "$test_status" == "pass" ]; then
-                    icon="✅"
-                else
-                    icon="❌"
-                fi
-
-                # Show icon with transport abbreviation
-                result="${result}${icon}${test_transport:0:1} "
-            fi
+        # Header row
+        echo -n "| Dialer \\ Listener |" >> "$OUTPUT_FILE"
+        for listener in $listeners; do
+            echo -n " $listener |" >> "$OUTPUT_FILE"
         done
+        echo "" >> "$OUTPUT_FILE"
 
-        if [ -z "$result" ]; then
-            result="-"
-        fi
+        # Separator row
+        echo -n "|---|" >> "$OUTPUT_FILE"
+        for listener in $listeners; do
+            echo -n "---|" >> "$OUTPUT_FILE"
+        done
+        echo "" >> "$OUTPUT_FILE"
 
-        echo -n " $result |" >> "$OUTPUT_FILE"
+        # Data rows
+        for dialer in $dialers; do
+            echo -n "| **$dialer** |" >> "$OUTPUT_FILE"
+            for listener in $listeners; do
+                result="${matrix_cell["${relay}|${dialer}|${listener}"]:-}"
+                [ -z "$result" ] && result="-"
+                echo -n " $result |" >> "$OUTPUT_FILE"
+            done
+            echo "" >> "$OUTPUT_FILE"
+        done
+        echo "" >> "$OUTPUT_FILE"
     done
-    echo "" >> "$OUTPUT_FILE"
-done
 fi
 
 cat >> "$OUTPUT_FILE" <<EOF
@@ -220,7 +248,7 @@ echo "  ✓ Generated $OUTPUT_FILE"
 if command -v pandoc &> /dev/null; then
     HTML_FILE="${TEST_PASS_DIR:-.}/results.html"
     pandoc -f markdown -t html -s -o "$HTML_FILE" "$OUTPUT_FILE" \
-        --metadata title="Hole Punch Interop Results" \
+        --metadata title="Hole Punch (DCUtR) Interop Results" \
         --css style.css 2>/dev/null || pandoc -f markdown -t html -s -o "$HTML_FILE" "$OUTPUT_FILE"
     echo "  ✓ Generated $HTML_FILE"
 else

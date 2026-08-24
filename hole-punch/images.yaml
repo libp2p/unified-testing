@@ -28,6 +28,15 @@ relays:
     secureChannels: [noise, tls]
     muxers: [yamux, mplex]
 
+  - id: go-v0.49
+    source:
+      type: local
+      path: images/go/v0.49
+      dockerfile: Dockerfile.relay
+    transports: [quic-v1, tcp]
+    secureChannels: [noise, tls]
+    muxers: [yamux]
+
 # Implementation definitions
 implementations:
   - id: rust-v0.56
@@ -48,3 +57,12 @@ implementations:
     transports: [quic-v1, tcp]
     secureChannels: [noise]
     muxers: [yamux, mplex]
+
+  - id: go-v0.49
+    source:
+      type: local
+      path: images/go/v0.49
+      dockerfile: Dockerfile.peer
+    transports: [quic-v1, tcp]
+    secureChannels: [noise, tls]
+    muxers: [yamux]
