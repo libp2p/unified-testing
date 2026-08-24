@@ -784,9 +784,13 @@ EOF
 
               else
 
-                # Find common secure channels and muxers
-                common_secure=$(get_common "$dialer_secure" "$listener_secure")
-                common_muxers=$(get_common "$dialer_muxers" "$listener_muxers")
+                # Find common secure channels and muxers. The relay is included
+                # because the relay-hop connections negotiate a secure channel
+                # and muxer with each peer, so the relay must share both; a relay
+                # configured for a muxer it lacks (e.g. a yamux-only relay asked
+                # for mplex) fails to start.
+                common_secure=$(get_common "$relay_secure" "$dialer_secure" "$listener_secure")
+                common_muxers=$(get_common "$relay_muxers" "$dialer_muxers" "$listener_muxers")
 
                 # Skip if no common secure channels or muxers
                 [ -z "$common_secure" ] && continue

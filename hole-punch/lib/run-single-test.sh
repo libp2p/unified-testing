@@ -68,7 +68,11 @@ SUBNET_ID_2=$(( (16#${TEST_KEY:2:2} % 224 ) + 32 ))
 # Calculate network addresses
 #
 # The WAN stands in for the public internet and needs globally routable space.
-## 11.0.0.0/8 is allocated but unannounced.
+# go-libp2p starts its DCUtR service only once the host holds an address that
+# multiaddr reports as public. A peer's candidates are its LAN address plus
+# whatever the relay observed for it. With the WAN in 10.0.0.0/8 both are private,
+# the service never starts, and no CONNECT is ever sent.
+# 11.0.0.0/8 is allocated but unannounced so multiaddr reports as public.
 WAN_PREFIX="${WAN_PREFIX:-11}"
 WAN_SUBNET="${WAN_PREFIX}.${SUBNET_ID_1}.${SUBNET_ID_2}.64/27"
 DIALER_LAN_SUBNET="10.${SUBNET_ID_1}.${SUBNET_ID_2}.96/27"
@@ -236,6 +240,9 @@ else
 fi
 
 # Generate docker-compose file
+# nf_conntrack_tcp_be_liberal is set to one because Conntrack's strict window tracking
+# marks the out-of-window packets a TCP simultaneous open produces as INVALID, and the
+# FORWARD chain drops them.
 if [ "${IS_LEGACY_TEST}" == "true" ]; then
   # Legacy test: external shared network + Redis proxy for legacy containers
   # Relay and routers always connect to global Redis directly
@@ -305,6 +312,7 @@ ${RELAY_ENV}
       - net.ipv4.conf.default.forwarding=1
       - net.ipv4.conf.all.rp_filter=0
       - net.ipv4.conf.default.rp_filter=0
+      - net.netfilter.nf_conntrack_tcp_be_liberal=1
     depends_on:
       - relay
     environment:
@@ -329,6 +337,7 @@ ${DIALER_ROUTER_ENV}
       - net.ipv4.conf.default.forwarding=1
       - net.ipv4.conf.all.rp_filter=0
       - net.ipv4.conf.default.rp_filter=0
+      - net.netfilter.nf_conntrack_tcp_be_liberal=1
     depends_on:
       - relay
     environment:
@@ -426,6 +435,7 @@ ${RELAY_ENV}
       - net.ipv4.conf.default.forwarding=1
       - net.ipv4.conf.all.rp_filter=0
       - net.ipv4.conf.default.rp_filter=0
+      - net.netfilter.nf_conntrack_tcp_be_liberal=1
     depends_on:
       - relay
     environment:
@@ -450,6 +460,7 @@ ${DIALER_ROUTER_ENV}
       - net.ipv4.conf.default.forwarding=1
       - net.ipv4.conf.all.rp_filter=0
       - net.ipv4.conf.default.rp_filter=0
+      - net.netfilter.nf_conntrack_tcp_be_liberal=1
     depends_on:
       - relay
     environment:
