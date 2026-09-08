@@ -36,8 +36,101 @@ test-aliases:
     value: "eth-p2p-z-v0.0.1|eth-p2p-z-v0.0.2"
   - alias: "lua"
     value: "lua-v0.1.0"
-  - alias: "failing" # everything except rust-v0.56 and js and python-v0.x implementations as of 25 Jan 2026
-    value: "~browsers|go-v0.38|go-v0.39|go-v0.40|go-v0.41|go-v0.42|go-v0.43|go-v0.44|go-v0.45|~jvm|~c|~dotnet|~zig|eth-p2p-z-v0.0.1|rust-v0.53|rust-v0.54|rust-v0.55|lua-v0.1.0 x python-v0.x|js-v1.x"
+  # failing: test-pattern alias for --test-ignore "~failing" (substring|OR match).
+  # Reshaped from all×all baseline 8 Sep 2026 (2982 tests, 130 failed, 0 overmatch).
+  # Not impl-wide (~dotnet / ~zig / ~browsers): many dialer×listener×transport
+  # combos still pass (e.g. go/rust→zig quic, firefox WSS). Patterns below are
+  # the failing clusters: zig as dialer; x dotnet (tcp,tls,yamux); firefox-js WT;
+  # plus assorted one-offs (leanp2p, webkit-js-v1.x, chromium/go WT, …).
+  - alias: "failing"
+    value: "\
+      zig-v0.0.1 x | \
+      x dotnet-v1.0 (tcp, tls, yamux)|\
+      leanp2p x rust-|\
+      leanp2p x zig-v0.0.1 (quic-v1)|\
+      js-v1.x x jvm-v1.2 (ws, noise|\
+      webkit-js-v1.x x chromium|\
+      webkit-js-v1.x x firefox|\
+      webkit-js-v1.x x webkit|\
+      webkit-js-v1.x x python|\
+      webkit-js-v1.x x go-v0.47-pre|\
+      dotnet-v1.0 x go-v0.38 (tcp, tls, yamux)|\
+      dotnet-v1.0 x go-v0.39 (tcp, tls, yamux)|\
+      dotnet-v1.0 x go-v0.40 (tcp, tls, yamux)|\
+      dotnet-v1.0 x go-v0.41 (tcp, tls, yamux)|\
+      dotnet-v1.0 x go-v0.42 (tcp, tls, yamux)|\
+      dotnet-v1.0 x go-v0.43 (tcp, tls, yamux)|\
+      dotnet-v1.0 x go-v0.44 (tcp, tls, yamux)|\
+      dotnet-v1.0 x go-v0.45 (tcp, tls, yamux)|\
+      dotnet-v1.0 x go-v0.47-pre (tcp, tls, yamux)|\
+      dotnet-v1.0 x jvm-v1.2 (tcp, tls, yamux)|\
+      dotnet-v1.0 x python-v0.x (tcp, tls, yamux)|\
+      dotnet-v1.0 x rust-v0.53 (tcp, tls, yamux)|\
+      dotnet-v1.0 x rust-v0.54 (tcp, tls, yamux)|\
+      dotnet-v1.0 x rust-v0.55 (tcp, tls, yamux)|\
+      dotnet-v1.0 x rust-v0.56 (tcp, tls, yamux)|\
+      dotnet-v1.0 x zig-v0.0.1 (quic-v1)|\
+      c-v0.0.1 x jvm-v1.2 (tcp, noise, yamux)|\
+      c-v0.0.1 x lua-v0.1.0 (tcp, noise, yamux)|\
+      c-v0.0.1 x nim-v2.2.0 (quic-v1)|\
+      c-v0.0.1 x zig-v0.0.1 (quic-v1)|\
+      chromium-js-v1.x x go-v0.41 (webtransport)|\
+      chromium-js-v1.x x go-v0.42 (webtransport)|\
+      chromium-js-v1.x x go-v0.43 (webrtc-direct)|\
+      chromium-js-v1.x x python-v0.x (wss, noise, yamux)|\
+      chromium-js-v1.x x webkit-js-v2.x (webrtc)|\
+      chromium-js-v2.x x go-v0.40 (webrtc-direct)|\
+      chromium-js-v2.x x go-v0.41 (webtransport)|\
+      chromium-js-v2.x x go-v0.42 (webtransport)|\
+      chromium-js-v2.x x go-v0.42 (wss, noise, yamux)|\
+      chromium-js-v2.x x go-v0.43 (webrtc-direct)|\
+      chromium-rust-v0.53 x go-v0.47-pre (webtransport)|\
+      chromium-rust-v0.53 x jvm-v1.2 (ws, noise, mplex)|\
+      eth-p2p-z-v0.0.1 x eth-p2p-z-v0.0.2 (quic-v1)|\
+      eth-p2p-z-v0.0.1 x zig-v0.0.1 (quic-v1)|\
+      eth-p2p-z-v0.0.2 x zig-v0.0.1 (quic-v1)|\
+      firefox-js-v1.x x go-v0.38 (webtransport)|\
+      firefox-js-v1.x x go-v0.39 (webtransport)|\
+      firefox-js-v1.x x go-v0.40 (webtransport)|\
+      firefox-js-v1.x x go-v0.41 (webtransport)|\
+      firefox-js-v1.x x go-v0.42 (webtransport)|\
+      firefox-js-v1.x x go-v0.43 (webtransport)|\
+      firefox-js-v1.x x go-v0.44 (webtransport)|\
+      firefox-js-v1.x x go-v0.45 (webtransport)|\
+      firefox-js-v1.x x go-v0.47-pre (webtransport)|\
+      firefox-js-v1.x x python-v0.x (webtransport)|\
+      firefox-js-v2.x x go-v0.38 (webtransport)|\
+      firefox-js-v2.x x go-v0.39 (webtransport)|\
+      firefox-js-v2.x x go-v0.40 (webtransport)|\
+      firefox-js-v2.x x go-v0.41 (webrtc-direct)|\
+      firefox-js-v2.x x go-v0.41 (webtransport)|\
+      firefox-js-v2.x x go-v0.41 (wss, noise, yamux)|\
+      firefox-js-v2.x x go-v0.42 (webrtc-direct)|\
+      firefox-js-v2.x x go-v0.42 (webtransport)|\
+      firefox-js-v2.x x go-v0.42 (wss, noise, yamux)|\
+      firefox-js-v2.x x go-v0.43 (webtransport)|\
+      firefox-js-v2.x x go-v0.43 (wss, noise, yamux)|\
+      firefox-js-v2.x x go-v0.44 (webtransport)|\
+      firefox-js-v2.x x go-v0.45 (webtransport)|\
+      firefox-js-v2.x x go-v0.47-pre (webtransport)|\
+      firefox-js-v2.x x python-v0.x (webtransport)|\
+      firefox-js-v2.x x rust-v0.53 (webrtc-direct)|\
+      go-v0.47-pre x go-v0.38 (webtransport)|\
+      go-v0.47-pre x go-v0.39 (webtransport)|\
+      go-v0.47-pre x go-v0.40 (webtransport)|\
+      go-v0.47-pre x go-v0.41 (webtransport)|\
+      go-v0.47-pre x go-v0.42 (webtransport)|\
+      go-v0.47-pre x go-v0.43 (webtransport)|\
+      go-v0.47-pre x go-v0.44 (webtransport)|\
+      go-v0.47-pre x go-v0.45 (webtransport)|\
+      jvm-v1.2 x zig-v0.0.1 (quic-v1)|\
+      nim-v2.2.0 x c-v0.0.1 (quic-v1)|\
+      nim-v2.2.0 x dotnet-v1.0 (quic-v1)|\
+      python-v0.x x zig-v0.0.1 (quic-v1)|\
+      webkit-js-v2.x x go-v0.38 (wss, noise, yamux)|\
+      webkit-js-v2.x x rust-v0.53 (webrtc-direct)"
+
+
 
 implementations:
   # Leanp2p implementations
@@ -203,12 +296,15 @@ implementations:
   # Python implementation
   - id: python-v0.x
     source:
+      # type: local
+      # path: images/python/v0.x
+      # dockerfile: interop/transport/Dockerfile
       type: github
       repo: libp2p/py-libp2p
-      #commit: 22ea173ac0359a386275bdf6b846bc52a0082e91
-      commit: e4cb3f8c0c758420f9bdd6a195529b22f14ab765
+      # quiet host.run/close (#1517) + listener Redis publish indent hotfix (#1519)
+      commit: a48cc47781c85a0266a0bc962d3600c6bca16c4c
       dockerfile: interop/transport/Dockerfile
-    transports: [tcp, ws, wss, quic-v1]
+    transports: [tcp, ws, wss, quic-v1, webtransport]
     secureChannels: [tls, noise]
     muxers: [mplex, yamux]
 
