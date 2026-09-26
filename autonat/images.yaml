@@ -1,0 +1,10 @@
+# NOTE: Paths are relative to the autonat/ directory. Run via ./run.sh.
+implementations:
+  - id: go
+    imageName: autonat-go
+    buildContext: ./images/go
+    dockerfile: Dockerfile
+  - id: py
+    imageName: autonat-py
+    buildContext: ./images/py
+    dockerfile: Dockerfile
