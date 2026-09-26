@@ -1,0 +1,25 @@
+name: Relay Interoperability Tests (PR)
+
+on:
+  pull_request:
+    paths:
+      - 'relay/**'
+      - '.github/actions/run-bash-relay-test/**'
+      - '.github/workflows/relay-interop-pr.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  run-tests:
+    runs-on: [self-hosted, linux, x64, ephemeral]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run relay interop tests
+        uses: ./.github/actions/run-bash-relay-test
