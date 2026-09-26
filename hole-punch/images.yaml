@@ -6,6 +6,10 @@
 test-aliases:
   - alias: "nim"
     value: "nim-v2.2"
+  - alias: "python"
+    value: "py-v0.7.0"
+  - alias: "go"
+    value: "go-v0.49"
   - alias: "failing"
     value: ""
 
@@ -28,6 +32,24 @@ relays:
     secureChannels: [noise, tls]
     muxers: [yamux, mplex]
 
+  - id: py-v0.7.0
+    source:
+      type: local
+      path: images/py
+      dockerfile: Dockerfile.relay
+    transports: [tcp]
+    secureChannels: [noise]
+    muxers: [yamux]
+
+  - id: go-v0.49
+    source:
+      type: local
+      path: images/go
+      dockerfile: Dockerfile.relay
+    transports: [tcp]
+    secureChannels: [noise]
+    muxers: [yamux]
+
 # Implementation definitions
 implementations:
   - id: rust-v0.56
@@ -48,3 +70,21 @@ implementations:
     transports: [quic-v1, tcp]
     secureChannels: [noise]
     muxers: [yamux, mplex]
+
+  - id: py-v0.7.0
+    source:
+      type: local
+      path: images/py
+      dockerfile: Dockerfile
+    transports: [tcp]
+    secureChannels: [noise]
+    muxers: [yamux]
+
+  - id: go-v0.49
+    source:
+      type: local
+      path: images/go
+      dockerfile: Dockerfile.peer
+    transports: [tcp]
+    secureChannels: [noise]
+    muxers: [yamux]

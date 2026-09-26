@@ -138,8 +138,7 @@ See [Latest Test Results](LATEST_TEST_RESULTS.md) for detailed results table.
 
 - ✅ Test passed
 - ❌ Test failed
-- **Transport abbreviations**: t=tcp, q=quic, w=ws, W=wss (first letter)
-- Example: ✅t = TCP test passed, ❌q = QUIC test failed
+- Matrix cells aggregate all transports/relays for the pair: ✅n ❌m = n passed, m failed
 
 ---
 
@@ -173,31 +172,27 @@ for dialer in $dialers; do
     echo -n "| **$dialer** |" >> "$OUTPUT_FILE"
 
     for listener in $listeners; do
-        # Find tests for this combination using hash map lookups
-        result=""
-
-        # Try all possible transport combinations using hash map lookups (O(1) instead of O(n))
-        # This is much faster than searching through all tests linearly
-        for transport in "tcp" "quic" "quic-v1" "ws" "wss" "webrtc" "webrtc-direct" "webtransport"; do
-            test_name="$dialer x $listener ($transport)"
-
-            # O(1) hash map lookup instead of O(n) linear search
-            if [ -n "${test_status_map[$test_name]:-}" ]; then
-                test_status="${test_status_map[$test_name]}"
-                test_transport="${test_transport_map[$test_name]}"
-
-                if [ "$test_status" == "pass" ]; then
-                    icon="✅"
-                else
-                    icon="❌"
-                fi
-
-                # Show icon with transport abbreviation
-                result="${result}${icon}${test_transport:0:1} "
-            fi
+        # Aggregate all tests for this dialer x listener pair. Test IDs
+        # carry extra dimensions (secure channel, muxer, relay, routers),
+        # so an exact "$dialer x $listener ($transport)" key never matches.
+        # Match on the "<dialer> x <listener> (" prefix instead.
+        pass_count=0
+        fail_count=0
+        for key in "${!test_status_map[@]}"; do
+            case "$key" in
+                "$dialer x $listener ("*)
+                    if [ "${test_status_map[$key]}" == "pass" ]; then
+                        pass_count=$((pass_count + 1))
+                    else
+                        fail_count=$((fail_count + 1))
+                    fi
+                    ;;
+            esac
         done
 
-        if [ -z "$result" ]; then
+        if [ "$pass_count" -gt 0 ] || [ "$fail_count" -gt 0 ]; then
+            result="✅${pass_count} ❌${fail_count}"
+        else
             result="-"
         fi
 

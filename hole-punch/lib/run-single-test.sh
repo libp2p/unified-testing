@@ -142,7 +142,7 @@ cleanup() {
 trap cleanup EXIT
 
 # Build environment variables for relay (always modern - connects to global Redis)
-RELAY_ENV="      - REDIS_ADDR=hole-punch-redis:6379
+RELAY_ENV="      - REDIS_ADDR=${HOLE_PUNCH_REDIS_NAME:-hole-punch-redis}:6379
       - TEST_KEY=${TEST_KEY}
       - TRANSPORT=${TRANSPORT_NAME}
       - RELAY_IP=${RELAY_IP}
@@ -187,7 +187,7 @@ if [ "${DIALER_LEGACY}" == "true" ]; then
       - wan_router_ip=${DIALER_ROUTER_LAN_IP}"
 else
   DIALER_ENV="      - IS_DIALER=true
-      - REDIS_ADDR=hole-punch-redis:6379
+      - REDIS_ADDR=${HOLE_PUNCH_REDIS_NAME:-hole-punch-redis}:6379
       - TEST_KEY=${TEST_KEY}
       - TRANSPORT=${TRANSPORT_NAME}
       - DIALER_IP=${DIALER_IP}
@@ -214,7 +214,7 @@ if [ "${LISTENER_LEGACY}" == "true" ]; then
       - wan_router_ip=${LISTENER_ROUTER_LAN_IP}"
 else
   LISTENER_ENV="      - IS_DIALER=false
-      - REDIS_ADDR=hole-punch-redis:6379
+      - REDIS_ADDR=${HOLE_PUNCH_REDIS_NAME:-hole-punch-redis}:6379
       - TEST_KEY=${TEST_KEY}
       - TRANSPORT=${TRANSPORT_NAME}
       - LISTENER_IP=${LISTENER_IP}
@@ -265,7 +265,7 @@ services:
       - hole-punch-network
     environment:
       - TEST_KEY=${TEST_KEY}
-      - REDIS_ADDR=hole-punch-redis:6379
+      - REDIS_ADDR=${HOLE_PUNCH_REDIS_NAME:-hole-punch-redis}:6379
 
   relay:
     image: ${RELAY_IMAGE}

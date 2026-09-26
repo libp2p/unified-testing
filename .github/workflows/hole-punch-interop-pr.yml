@@ -125,37 +125,20 @@ jobs:
             echo "should-run-tests=true" >> $GITHUB_OUTPUT
             echo "→ Manual trigger: using workflow inputs"
           else
-            # Automatic trigger - use change detection outputs
-            echo "test-select=${{ steps.detect.outputs.changed-impls }}" >> $GITHUB_OUTPUT
+            # Automatic trigger: always run the FULL matrix. Change-scoped
+            # selects are unsound for interop (a new peer must be tested
+            # against every existing relay/router/peer, not just changed
+            # ones), so select everything except known-broken.
+            echo "test-select=" >> $GITHUB_OUTPUT
 
             # Always include ~failing to skip known-broken tests.
-            # Do NOT add negated implementation patterns to test-ignore here -
-            # that conflicts with test-select and can result in 0 selected tests.
             echo "test-ignore=~failing" >> $GITHUB_OUTPUT
 
-            echo "relay-select=${{ steps.detect.outputs.changed-relays }}" >> $GITHUB_OUTPUT
+            echo "relay-select=" >> $GITHUB_OUTPUT
+            echo "relay-ignore=~failing" >> $GITHUB_OUTPUT
 
-            # Negate each relay ID in the pipe-separated list
-            # Always include ~failing to skip known-broken relays
-            CHANGED_RELAYS="${{ steps.detect.outputs.changed-relays }}"
-            if [ -n "$CHANGED_RELAYS" ]; then
-              NEGATED_RELAYS=$(echo "$CHANGED_RELAYS" | sed 's/|/|!/g;s/^/!/')
-              echo "relay-ignore=~failing|$NEGATED_RELAYS" >> $GITHUB_OUTPUT
-            else
-              echo "relay-ignore=~failing" >> $GITHUB_OUTPUT
-            fi
-
-            echo "router-select=${{ steps.detect.outputs.changed-routers }}" >> $GITHUB_OUTPUT
-
-            # Negate each router ID in the pipe-separated list
-            # Always include ~failing to skip known-broken routers
-            CHANGED_ROUTERS="${{ steps.detect.outputs.changed-routers }}"
-            if [ -n "$CHANGED_ROUTERS" ]; then
-              NEGATED_ROUTERS=$(echo "$CHANGED_ROUTERS" | sed 's/|/|!/g;s/^/!/')
-              echo "router-ignore=~failing|$NEGATED_ROUTERS" >> $GITHUB_OUTPUT
-            else
-              echo "router-ignore=~failing" >> $GITHUB_OUTPUT
-            fi
+            echo "router-select=" >> $GITHUB_OUTPUT
+            echo "router-ignore=~failing" >> $GITHUB_OUTPUT
 
             echo "transport-ignore=ws|webrtc-direct" >> $GITHUB_OUTPUT
             echo "force-matrix-rebuild=${{ steps.detect.outputs.impls-yaml-changed }}" >> $GITHUB_OUTPUT

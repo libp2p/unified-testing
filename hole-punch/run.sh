@@ -277,6 +277,11 @@ init_cache_dirs
 
 # Generate test run key and test pass name
 export TEST_TYPE="hole-punch"
+
+# Unique Redis per run: the container name doubles as the DNS hostname peers
+# use (REDIS_ADDR), so concurrent runs (PR + daily) must not share one.
+# Falls back to a timestamped local name outside CI.
+export HOLE_PUNCH_REDIS_NAME="hole-punch-redis-${GITHUB_RUN_ID:-local-$(date +%s)}"
 export TEST_RUN_KEY=$(compute_test_run_key \
   "${IMAGES_YAML}" \
   "${IMPL_SELECT}" \
@@ -628,7 +633,7 @@ println
 # Start global services
 print_header "Staring global services..."
 indent
-start_redis_service "${TEST_TYPE}-network" "${TEST_TYPE}-redis" || {
+start_redis_service "${TEST_TYPE}-network" "${HOLE_PUNCH_REDIS_NAME}" || {
   print_error "Starting global services failed"
   unindent
   return 1
@@ -685,7 +690,7 @@ println
 # Stop global services
 print_header "Stopping global services..."
 indent
-stop_redis_service "${TEST_TYPE}-network" "${TEST_TYPE}-redis" || {
+stop_redis_service "${TEST_TYPE}-network" "${HOLE_PUNCH_REDIS_NAME}" || {
   print_error "Stopping global services failed"
   unindent
   return 1
