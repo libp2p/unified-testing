@@ -11,10 +11,8 @@ implementations:
     source:
       type: github
       repo: NethermindEth/dotnet-libp2p
-      commit: 960726885ca467fd2205bbb0fa4821a34b9e8f31
+      commit: e7284273729a9d6231af8959078258f31bdd67f5
       vendorDir: dotnet-libp2p
-      patchPath: images/dotnet
-      patchFile: interop-fix.patch
   - id: nim
     imageName: kad-dht-nim
     source:
