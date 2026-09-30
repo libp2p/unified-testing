@@ -5,7 +5,7 @@ use tokio::net::{TcpListener, TcpStream};
 /// RESP Redis proxy that translates legacy key names to modern format.
 ///
 /// Legacy libp2p implementations use the hardcoded key `listenerAddr` for
-/// RPUSH/BLPOP coordination. Modern implementations use `{TEST_KEY}_listener_multiaddr`.
+/// RPUSH/LPOP/BLPOP coordination. Modern implementations use `{TEST_KEY}_listener_multiaddr`.
 /// This proxy intercepts Redis commands and rewrites key names so legacy and
 /// modern containers can share a single global Redis instance.
 
@@ -294,8 +294,8 @@ fn rewrite_client_command(msg: &Resp, modern: &[u8]) -> Resp {
     };
 
     match cmd.as_slice() {
-        // RPUSH key value [value ...]
-        b"RPUSH" => {
+        // RPUSH key value [value ...], LPOP key [count]
+        b"RPUSH" | b"LPOP" => {
             let mut new_items = vec![items[0].clone(), replace_key(&items[1], modern)];
             new_items.extend_from_slice(&items[2..]);
             Resp::Array(Some(new_items))
@@ -376,6 +376,38 @@ mod tests {
         let rewritten = rewrite_client_command(&cmd, modern);
         if let Resp::Array(Some(items)) = rewritten {
             assert!(matches!(&items[1], Resp::Bulk(Some(k)) if k == modern));
+        } else {
+            panic!("expected array");
+        }
+    }
+
+    #[test]
+    fn test_rewrite_lpop() {
+        let modern = b"abc12345_listener_multiaddr";
+        let cmd = Resp::Array(Some(vec![
+            Resp::Bulk(Some(b"LPOP".to_vec())),
+            Resp::Bulk(Some(b"listenerAddr".to_vec())),
+        ]));
+        let rewritten = rewrite_client_command(&cmd, modern);
+        if let Resp::Array(Some(items)) = rewritten {
+            assert!(matches!(&items[1], Resp::Bulk(Some(k)) if k == modern));
+        } else {
+            panic!("expected array");
+        }
+    }
+
+    #[test]
+    fn test_rewrite_lpop_with_count() {
+        let modern = b"abc12345_listener_multiaddr";
+        let cmd = Resp::Array(Some(vec![
+            Resp::Bulk(Some(b"LPOP".to_vec())),
+            Resp::Bulk(Some(b"listenerAddr".to_vec())),
+            Resp::Bulk(Some(b"2".to_vec())),
+        ]));
+        let rewritten = rewrite_client_command(&cmd, modern);
+        if let Resp::Array(Some(items)) = rewritten {
+            assert!(matches!(&items[1], Resp::Bulk(Some(k)) if k == modern));
+            assert!(matches!(&items[2], Resp::Bulk(Some(v)) if v == b"2"));
         } else {
             panic!("expected array");
         }
