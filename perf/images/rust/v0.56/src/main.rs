@@ -197,7 +197,6 @@ async fn run_listener(
                     // Respond with the requested bytes
                     let response = PerfResponse {
                         bytes_sent: request.recv_bytes, // Send what client wants to receive
-                        _bytes_received: request.send_bytes, // Track what we received
                     };
 
                     swarm
@@ -591,9 +590,20 @@ async fn run_measurement(
             }
         };
 
-        // Skip this iteration if request failed
-        if response_result.is_none() {
-            continue;
+        // A short or oversized response is a failed benchmark iteration.
+        match response_result {
+            Some(response) if response.bytes_sent == download_bytes => {}
+            Some(response) => {
+                eprintln!(
+                    "  Iteration {}/{} failed: expected {} response bytes, received {}",
+                    i + 1,
+                    iterations,
+                    download_bytes,
+                    response.bytes_sent,
+                );
+                continue;
+            }
+            None => continue,
         }
 
         let elapsed = start.elapsed().as_secs_f64();
@@ -619,8 +629,7 @@ async fn run_measurement(
     }
 
     if values.is_empty() {
-        eprintln!("Warning: All iterations failed, using placeholder values");
-        values.push(0.0);
+        bail!("All perf measurement iterations failed");
     }
 
     // Sort values for percentile calculation

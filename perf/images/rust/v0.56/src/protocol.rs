@@ -17,8 +17,7 @@ pub struct PerfRequest {
 // Perf protocol response
 #[derive(Debug, Clone)]
 pub struct PerfResponse {
-    pub bytes_sent: u64,      // Bytes server sent back
-    pub _bytes_received: u64, // Bytes server received from client
+    pub bytes_sent: u64, // Bytes server sent back
 }
 
 // Perf protocol codec
@@ -43,25 +42,20 @@ impl libp2p::request_response::Codec for PerfCodec {
 
         let mut buf = [0u8; 8];
 
-        // Read how many bytes client will send (8 bytes, big-endian u64)
-        io.read_exact(&mut buf).await?;
-        let send_bytes = u64::from_be_bytes(buf);
-
-        // Read how many bytes client wants to receive (8 bytes, big-endian u64)
+        // Read how many bytes the client wants to receive.
         io.read_exact(&mut buf).await?;
         let recv_bytes = u64::from_be_bytes(buf);
 
-        // Drain the client's upload data
-        let mut total_received = 0u64;
+        // The upload ends at the client's write-half-close, not at a declared size.
+        let mut send_bytes = 0u64;
         let mut read_buf = vec![0u8; BLOCK_SIZE];
 
-        while total_received < send_bytes {
-            let to_read = std::cmp::min(send_bytes - total_received, BLOCK_SIZE as u64) as usize;
-            let n = io.read(&mut read_buf[..to_read]).await?;
+        loop {
+            let n = io.read(&mut read_buf).await?;
             if n == 0 {
-                break; // EOF
+                break;
             }
-            total_received += n as u64;
+            send_bytes += n as u64;
         }
 
         Ok(PerfRequest {
@@ -91,10 +85,7 @@ impl libp2p::request_response::Codec for PerfCodec {
             }
         }
 
-        Ok(PerfResponse {
-            bytes_sent: 0,
-            _bytes_received: total,
-        })
+        Ok(PerfResponse { bytes_sent: total })
     }
 
     async fn write_request<T>(
@@ -108,10 +99,7 @@ impl libp2p::request_response::Codec for PerfCodec {
     {
         use futures::AsyncWriteExt;
 
-        // Send BOTH byte counts (16 bytes total)
-        // First: how many bytes we will send
-        io.write_all(&req.send_bytes.to_be_bytes()).await?;
-        // Second: how many bytes we want to receive
+        // Send the requested download size as one big-endian u64.
         io.write_all(&req.recv_bytes.to_be_bytes()).await?;
 
         // Send our data
@@ -151,5 +139,129 @@ impl libp2p::request_response::Codec for PerfCodec {
 
         io.flush().await?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use futures::{io::Cursor, AsyncRead, FutureExt};
+    use libp2p::request_response::Codec;
+    use std::{
+        pin::Pin,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
+        task::{Context, Poll},
+    };
+
+    struct PausedEof {
+        input: Cursor<Vec<u8>>,
+        closed: Arc<AtomicBool>,
+    }
+
+    impl AsyncRead for PausedEof {
+        fn poll_read(
+            self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+            buf: &mut [u8],
+        ) -> Poll<std::io::Result<usize>> {
+            let this = self.get_mut();
+            match Pin::new(&mut this.input).poll_read(cx, buf) {
+                Poll::Ready(Ok(0)) if !this.closed.load(Ordering::SeqCst) => Poll::Pending,
+                result => result,
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn request_uses_one_download_length_followed_by_upload() {
+        let mut io = Cursor::new(Vec::new());
+        PerfCodec
+            .write_request(
+                &PERF_PROTOCOL,
+                &mut io,
+                PerfRequest {
+                    send_bytes: 3,
+                    recv_bytes: 5,
+                },
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            io.into_inner(),
+            [5u64.to_be_bytes().as_slice(), &[0, 0, 0]].concat()
+        );
+    }
+
+    #[tokio::test]
+    async fn server_drains_upload_through_eof() {
+        let upload = vec![0xAB; BLOCK_SIZE + 3];
+        let mut wire = 7u64.to_be_bytes().to_vec();
+        wire.extend_from_slice(&upload);
+
+        let request = PerfCodec
+            .read_request(&PERF_PROTOCOL, &mut Cursor::new(wire))
+            .await
+            .unwrap();
+
+        assert_eq!(request.recv_bytes, 7);
+        assert_eq!(request.send_bytes, upload.len() as u64);
+    }
+
+    #[tokio::test]
+    async fn server_waits_for_upload_half_close() {
+        let mut wire = 3u64.to_be_bytes().to_vec();
+        wire.extend_from_slice(&7u64.to_be_bytes());
+        wire.extend_from_slice(&[1, 2, 3]);
+        let closed = Arc::new(AtomicBool::new(false));
+        let mut io = PausedEof {
+            input: Cursor::new(wire),
+            closed: closed.clone(),
+        };
+        let mut codec = PerfCodec;
+        let protocol = PERF_PROTOCOL;
+        let mut read = Box::pin(codec.read_request(&protocol, &mut io));
+
+        assert!(read.as_mut().now_or_never().is_none());
+        closed.store(true, Ordering::SeqCst);
+        let request = read.await.unwrap();
+        assert_eq!(request.recv_bytes, 3);
+        assert_eq!(request.send_bytes, 11);
+    }
+
+    #[tokio::test]
+    async fn server_accepts_empty_upload_and_maximum_download_length() {
+        let request = PerfCodec
+            .read_request(&PERF_PROTOCOL, &mut Cursor::new(u64::MAX.to_be_bytes()))
+            .await
+            .unwrap();
+
+        assert_eq!(request.recv_bytes, u64::MAX);
+        assert_eq!(request.send_bytes, 0);
+    }
+
+    #[tokio::test]
+    async fn client_counts_response_bytes() {
+        let response = PerfCodec
+            .read_response(&PERF_PROTOCOL, &mut Cursor::new([0xAB; 3]))
+            .await
+            .unwrap();
+
+        assert_eq!(response.bytes_sent, 3);
+    }
+
+    #[tokio::test]
+    async fn server_sends_exact_requested_length() {
+        for length in [0, 1, BLOCK_SIZE as u64 + 3] {
+            let mut io = Cursor::new(Vec::new());
+            PerfCodec
+                .write_response(&PERF_PROTOCOL, &mut io, PerfResponse { bytes_sent: length })
+                .await
+                .unwrap();
+            assert_eq!(io.into_inner(), vec![0; length as usize]);
+        }
     }
 }
