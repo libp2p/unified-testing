@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"net"
 	"os"
 	"sort"
 	"strconv"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/libp2p/go-libp2p"
 	mplex "github.com/libp2p/go-libp2p-mplex"
+	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
@@ -79,18 +81,13 @@ func runServerMode() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	h.SetStreamHandler(perfProtocol, handlePerfStream)
 
 	// Publish listener multiaddr via Redis using the test key.
 	// The dialer waits for this key to coordinate startup.
-	addrForDialer := ""
-	for _, addr := range h.Addrs() {
-		if s := addr.String(); s != "" && s != "/ip4/127.0.0.1/tcp/4001" {
-			addrForDialer = s
-			break
-		}
-	}
-	if addrForDialer == "" && len(h.Addrs()) > 0 {
-		addrForDialer = h.Addrs()[0].String()
+	addrForDialer, err := selectListenerAddr(h.Addrs())
+	if err != nil {
+		log.Fatal(err)
 	}
 	fullAddr := fmt.Sprintf("%s/p2p/%s", addrForDialer, h.ID())
 	redisKey := fmt.Sprintf("%s_listener_multiaddr", testKey)
@@ -108,6 +105,20 @@ func runServerMode() {
 
 	// Keep server running
 	select {}
+}
+
+func selectListenerAddr(addrs []multiaddr.Multiaddr) (string, error) {
+	for _, addr := range addrs {
+		value, err := addr.ValueForProtocol(multiaddr.P_IP4)
+		if err != nil {
+			continue
+		}
+		ip := net.ParseIP(value)
+		if ip != nil && ip.IsGlobalUnicast() {
+			return addr.String(), nil
+		}
+	}
+	return "", fmt.Errorf("no reachable IPv4 listener address")
 }
 
 func runClientMode() {
@@ -150,23 +161,30 @@ func runClientMode() {
 		log.Fatalf("Failed to parse addr: %v", err)
 	}
 
-	// Connect to server. Keep running even if connect fails so perf harness
-	// can still collect dialer output for this placeholder implementation.
 	if err := h.Connect(ctx, *addrInfo); err != nil {
-		log.Printf("Failed to connect: %v", err)
+		log.Fatalf("Failed to connect: %v", err)
 	}
 
 	log.Printf("Connected to %s\n", addrInfo.ID)
 
 	// Run measurements
 	log.Printf("Running upload test (%d iterations)...\n", uploadIters)
-	uploadStats := runMeasurement(uploadBytes, 0, uploadIters)
+	uploadStats, err := runMeasurement(ctx, h, addrInfo.ID, uploadBytes, 0, uploadIters)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	log.Printf("Running download test (%d iterations)...\n", downloadIters)
-	downloadStats := runMeasurement(0, downloadBytes, downloadIters)
+	downloadStats, err := runMeasurement(ctx, h, addrInfo.ID, 0, downloadBytes, downloadIters)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	log.Printf("Running latency test (%d iterations)...\n", latencyIters)
-	latencyStats := runMeasurement(1, 1, latencyIters)
+	latencyStats, err := runMeasurement(ctx, h, addrInfo.ID, 1, 1, latencyIters)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// Output results as YAML
 	fmt.Println("# Upload measurement")
@@ -234,17 +252,18 @@ func getSecurityAndMuxerOptions() []libp2p.Option {
 	return opts
 }
 
-func runMeasurement(uploadBytes, downloadBytes int64, iterations int) Stats {
+func runMeasurement(ctx context.Context, h host.Host, p peer.ID, uploadBytes, downloadBytes int64, iterations int) (Stats, error) {
+	if uploadBytes < 0 || downloadBytes < 0 || iterations <= 0 {
+		return Stats{}, fmt.Errorf("invalid perf measurement: upload=%d download=%d iterations=%d", uploadBytes, downloadBytes, iterations)
+	}
 	var values []float64
 
 	for i := 0; i < iterations; i++ {
-		start := time.Now()
-
-		// Placeholder: simulate transfer
-		// In real implementation, use perf.Send()
-		time.Sleep(10 * time.Millisecond)
-
-		elapsed := time.Since(start).Seconds()
+		duration, err := runPerfIteration(ctx, h, p, uint64(uploadBytes), uint64(downloadBytes))
+		if err != nil {
+			return Stats{}, fmt.Errorf("perf iteration %d/%d: %w", i+1, iterations, err)
+		}
+		elapsed := duration.Seconds()
 
 		// Calculate throughput if this is a throughput test
 		var value float64
@@ -260,7 +279,7 @@ func runMeasurement(uploadBytes, downloadBytes int64, iterations int) Stats {
 		values = append(values, value)
 	}
 
-	return calculateStats(values)
+	return calculateStats(values), nil
 }
 
 func calculateStats(values []float64) Stats {

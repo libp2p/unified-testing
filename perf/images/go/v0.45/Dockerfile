@@ -2,15 +2,8 @@ FROM golang:1.24.6-alpine AS builder
 
 WORKDIR /workspace
 
-# Install dependencies
-RUN apk add --no-cache git make
-
-# Clone go-libp2p perf implementation
-# Using the libp2p/test-plans perf implementation as a base
-RUN git clone --depth 1 https://github.com/libp2p/go-libp2p.git /tmp/go-libp2p || true
-
-# Create perf implementation
 COPY main.go go.mod go.sum* ./
+COPY perf.go ./
 
 # Download dependencies
 RUN go mod download
