@@ -71,7 +71,6 @@ class Program
                     Multiaddrs = session.RemoteAddress is not null ? [session.RemoteAddress.ToString()] : Array.Empty<string>()
                 });
             }
-            return Task.CompletedTask;
         };
 
         var cts = new CancellationTokenSource();
