@@ -55,7 +55,8 @@ implementations:
     source:
       type: github
       repo: adust09/hs-libp2p
-      commit: 31849f062fdbe801d844c3736aa25b7ac496f8b5
+      # Track hs-libp2p PR #349 for validation; pin its merge commit before merging this PR.
+      commit: develop
       dockerfile: interop/hole-punch/Dockerfile
     transports: [tcp]
     secureChannels: [noise]
