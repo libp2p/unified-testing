@@ -6,6 +6,8 @@
 test-aliases:
   - alias: "nim"
     value: "nim-v2.2"
+  - alias: "haskell"
+    value: "haskell-v0.1"
   - alias: "failing"
     value: ""
 
@@ -48,3 +50,14 @@ implementations:
     transports: [quic-v1, tcp]
     secureChannels: [noise]
     muxers: [yamux, mplex]
+
+  - id: haskell-v0.1
+    source:
+      type: github
+      repo: adust09/hs-libp2p
+      # Track hs-libp2p PR #349 for validation; pin its merge commit before merging this PR.
+      commit: develop
+      dockerfile: interop/hole-punch/Dockerfile
+    transports: [tcp]
+    secureChannels: [noise]
+    muxers: [yamux]
