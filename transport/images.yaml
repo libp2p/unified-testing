@@ -15,7 +15,7 @@ test-aliases:
   - alias: "rust"
     value: "rust-v0.53|rust-v0.54|rust-v0.55|rust-v0.56"
   - alias: "go"
-    value: "go-v0.38|go-v0.39|go-v0.40|go-v0.41|go-v0.42|go-v0.43|go-v0.44|go-v0.45"
+    value: "go-v0.38|go-v0.39|go-v0.40|go-v0.41|go-v0.42|go-v0.43|go-v0.44|go-v0.45|go-v0.46|go-v0.47-pre|go-v0.47|go-v0.48|go-v0.49|go-v0.50|go-v0.51|go-v0.52"
   - alias: "python"
     value: "python-v0.x"
   - alias: "js"
@@ -37,7 +37,7 @@ test-aliases:
   - alias: "lua"
     value: "lua-v0.1.0"
   - alias: "failing" # everything except rust-v0.56 and js and python-v0.x implementations as of 25 Jan 2026
-    value: "~browsers|go-v0.38|go-v0.39|go-v0.40|go-v0.41|go-v0.42|go-v0.43|go-v0.44|go-v0.45|~jvm|~c|~dotnet|~zig|eth-p2p-z-v0.0.1|rust-v0.53|rust-v0.54|rust-v0.55|lua-v0.1.0 x python-v0.x|js-v1.x"
+    value: "~browsers|go-v0.38|go-v0.39|go-v0.40|go-v0.41|go-v0.42|go-v0.43|go-v0.44|go-v0.45|go-v0.46|go-v0.47-pre|go-v0.47|go-v0.48|go-v0.49|go-v0.50|go-v0.51|go-v0.52|~jvm|~c|~dotnet|~zig|eth-p2p-z-v0.0.1|rust-v0.53|rust-v0.54|rust-v0.55|lua-v0.1.0 x python-v0.x|js-v1.x"
 
 implementations:
   # Leanp2p implementations
@@ -50,7 +50,7 @@ implementations:
     transports: [quic-v1]
     secureChannels: []
     muxers: []
-    
+
   # Rust implementations
   - id: rust-v0.53
     source:
@@ -104,7 +104,7 @@ implementations:
     source:
       type: github
       repo: libp2p/go-libp2p
-      commit: 7ce9c5024bc4c91fa7a3420e9a542435b9af6831  # v0.38.1
+      commit: 7ce9c5024bc4c91fa7a3420e9a542435b9af6831 # v0.38.1
       dockerfile: test-plans/PingDockerfile
     transports: [tcp, ws, wss, quic-v1, webtransport, webrtc-direct]
     secureChannels: [tls, noise]
@@ -115,7 +115,7 @@ implementations:
     source:
       type: github
       repo: libp2p/go-libp2p
-      commit: f38ab369bd8452a3df73ac6add0e02dd3f31fce3  # v0.39.0
+      commit: f38ab369bd8452a3df73ac6add0e02dd3f31fce3 # v0.39.0
       dockerfile: test-plans/PingDockerfile
     transports: [tcp, ws, wss, quic-v1, webtransport, webrtc-direct]
     secureChannels: [tls, noise]
@@ -126,7 +126,7 @@ implementations:
     source:
       type: github
       repo: libp2p/go-libp2p
-      commit: ce335621f2966a54001161ec313dbfda7a1296fe  # v0.40.0
+      commit: ce335621f2966a54001161ec313dbfda7a1296fe # v0.40.0
       dockerfile: test-plans/PingDockerfile
     transports: [tcp, ws, wss, quic-v1, webtransport, webrtc-direct]
     secureChannels: [tls, noise]
@@ -137,7 +137,7 @@ implementations:
     source:
       type: github
       repo: libp2p/go-libp2p
-      commit: 578af0c651a61549cc51a08c70f611c8977ae75e  # v0.41.0
+      commit: 578af0c651a61549cc51a08c70f611c8977ae75e # v0.41.0
       dockerfile: test-plans/PingDockerfile
     transports: [tcp, ws, wss, quic-v1, webtransport, webrtc-direct]
     secureChannels: [tls, noise]
@@ -148,7 +148,7 @@ implementations:
     source:
       type: github
       repo: libp2p/go-libp2p
-      commit: 000582cf2c5864b406122d9cff46dd3b8b04abe3  # v0.42.0
+      commit: 000582cf2c5864b406122d9cff46dd3b8b04abe3 # v0.42.0
       dockerfile: test-plans/PingDockerfile
     transports: [tcp, ws, wss, quic-v1, webtransport, webrtc-direct]
     secureChannels: [tls, noise]
@@ -159,7 +159,7 @@ implementations:
     source:
       type: github
       repo: libp2p/go-libp2p
-      commit: b75e678e64557ced9e02130b7253610c2a09447a  # v0.43.0
+      commit: b75e678e64557ced9e02130b7253610c2a09447a # v0.43.0
       dockerfile: test-plans/PingDockerfile
     transports: [tcp, ws, wss, quic-v1, webtransport, webrtc-direct]
     secureChannels: [tls, noise]
@@ -170,7 +170,7 @@ implementations:
     source:
       type: github
       repo: libp2p/go-libp2p
-      commit: bc0a6d52f507f378b7e6e66979b5cbd82c239bef  # v0.44.0
+      commit: bc0a6d52f507f378b7e6e66979b5cbd82c239bef # v0.44.0
       dockerfile: test-plans/PingDockerfile
     transports: [tcp, ws, wss, quic-v1, webtransport, webrtc-direct]
     secureChannels: [tls, noise]
@@ -181,7 +181,7 @@ implementations:
     source:
       type: github
       repo: libp2p/go-libp2p
-      commit: d0ecbf99a977f95428c72ec436b96ba17bbcfea0  # v0.45.0
+      commit: d0ecbf99a977f95428c72ec436b96ba17bbcfea0 # v0.45.0
       dockerfile: test-plans/PingDockerfile
     transports: [tcp, ws, wss, quic-v1, webtransport, webrtc-direct]
     secureChannels: [tls, noise]
@@ -195,6 +195,78 @@ implementations:
       commit: dd26469c52a7ba555095df0f8088ae1fff8c7627
       dockerfile: test-plans/PingDockerfile
       patchPath: images/go
+      patchFile: transport-fix.patch
+    transports: [tcp, ws, wss, quic-v1, webtransport, webrtc-direct]
+    secureChannels: [tls, noise]
+    muxers: [yamux]
+
+  - id: go-v0.47
+    source:
+      type: github
+      repo: libp2p/go-libp2p
+      commit: b93eda0937a5d5c53dbd624dae0df46aad239390
+      dockerfile: test-plans/PingDockerfile
+      patchPath: images/go
+      patchFile: transport-fix.patch
+    transports: [tcp, ws, wss, quic-v1, webtransport, webrtc-direct]
+    secureChannels: [tls, noise]
+    muxers: [yamux]
+
+  - id: go-v0.48
+    source:
+      type: github
+      repo: libp2p/go-libp2p
+      commit: 062200be7aa1d18a0f54eefb17b0dbe2e96f0a79
+      dockerfile: test-plans/PingDockerfile
+      patchPath: images/go
+      patchFile: transport-fix.patch
+    transports: [tcp, ws, wss, quic-v1, webtransport, webrtc-direct]
+    secureChannels: [tls, noise]
+    muxers: [yamux]
+
+  - id: go-v0.49
+    source:
+      type: github
+      repo: libp2p/go-libp2p
+      commit: 5c7e6ecb92be621abb5b8143d9bf67d760bd9be0
+      dockerfile: test-plans/PingDockerfile
+      patchPath: images/go/v0.49
+      patchFile: transport-fix.patch
+    transports: [tcp, ws, wss, quic-v1, webtransport, webrtc-direct]
+    secureChannels: [tls, noise]
+    muxers: [yamux]
+
+  - id: go-v0.50
+    source:
+      type: github
+      repo: libp2p/go-libp2p
+      commit: 3c2c902122cb6fae3897f729a3dbb9d4665ae90d
+      dockerfile: test-plans/PingDockerfile
+      patchPath: images/go/v0.49
+      patchFile: transport-fix.patch
+    transports: [tcp, ws, wss, quic-v1, webtransport, webrtc-direct]
+    secureChannels: [tls, noise]
+    muxers: [yamux]
+
+  - id: go-v0.51
+    source:
+      type: github
+      repo: libp2p/go-libp2p
+      commit: 03349944847387886bf06b65993b2a03c1e6d12d
+      dockerfile: test-plans/PingDockerfile
+      patchPath: images/go/v0.49
+      patchFile: transport-fix.patch
+    transports: [tcp, ws, wss, quic-v1, webtransport, webrtc-direct]
+    secureChannels: [tls, noise]
+    muxers: [yamux]
+
+  - id: go-v0.52
+    source:
+      type: github
+      repo: libp2p/go-libp2p
+      commit: ca96fd813d33c56dc2168459c10fdfb884640147
+      dockerfile: test-plans/PingDockerfile
+      patchPath: images/go/v0.49
       patchFile: transport-fix.patch
     transports: [tcp, ws, wss, quic-v1, webtransport, webrtc-direct]
     secureChannels: [tls, noise]
@@ -296,8 +368,8 @@ implementations:
       repo: Pier-Two/c-libp2p
       commit: 23a617223a3bbfb4b2af8f219f389e440b9c1ac2
       dockerfile: interop-tests/transport/Dockerfile
-      requiresSubmodules: true  # Needs git submodules
-      complexBuild: true  # Has many external dependencies
+      requiresSubmodules: true # Needs git submodules
+      complexBuild: true # Has many external dependencies
     transports: [tcp, quic-v1]
     secureChannels: [noise]
     muxers: [mplex, yamux]
