@@ -5,7 +5,7 @@
 # Usage: --test-select "~browsers" or --test-ignore "!~browsers"
 test-aliases:
   - alias: "all"
-    value: "~browsers|~rust|~go|~python|~js|~nim|~jvm|~c|~dotnet|~zig|~eth-p2p|~lua|~haskell"
+    value: "~browsers|~rust|~go|~python|~js|~nim|~jvm|~c|~dotnet|~zig|~eth-p2p|~lua|~haskell|~minip2p"
   - alias: "browsers"
     value: "chromium-rust-v0.53|chromium-rust-v0.54|chromium-rust-v0.56|chromium-js-v1.x|chromium-js-v2.x|firefox-js-v1.x|firefox-js-v2.x|webkit-js-v1.x|webkit-js-v2.x"
   - alias: "rust-browsers"
@@ -24,6 +24,8 @@ test-aliases:
     value: "nim-v2.2.0"
   - alias: "haskell"
     value: "haskell-v0.1"
+  - alias: "minip2p"
+    value: "minip2p-v0.11"
   - alias: "jvm"
     value: "jvm-v1.2"
   - alias: "c"
@@ -274,6 +276,17 @@ implementations:
       commit: 87b4b0b7a01cddefa294a651dc98a872a21bf66f
       dockerfile: Dockerfile
     transports: [tcp]
+    secureChannels: [noise]
+    muxers: [yamux]
+
+  # minip2p implementation (Rust, sans-I/O)
+  - id: minip2p-v0.11
+    source:
+      type: github
+      repo: deepso7/minip2p
+      commit: 22fe9d517c352e4bc411a6fecbda19ef28b7d521
+      dockerfile: tests/interop/unified-testing/Dockerfile
+    transports: [tcp, quic-v1]
     secureChannels: [noise]
     muxers: [yamux]
 
