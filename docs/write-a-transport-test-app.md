@@ -124,8 +124,10 @@ The typical high-level flow for any `transport` test application is as follows:
 1. When your test application is run in `dialer` mode, there are no other
    environment variables needed.
 
-2. Connect to the Redis server at `REDIS_ADDR` and poll it asking for the value
-   associated with the `<TEST_KEY>_listener_multiaddr` key.
+2. Connect to the Redis server at `REDIS_ADDR` and wait for the listener's
+   multiaddr with `BLPOP <TEST_KEY>_listener_multiaddr <timeout>`. The key is a
+   Redis list; `BLPOP` blocks until the listener pushes its address and returns
+   `[key, multiaddr]`.
 
 3. Dial the `listener` at the multiaddr you received from the Redis server.
 
@@ -156,8 +158,13 @@ The typical high-level flow for any `transport` test application is as follows:
 
 2. Listen on the non-localhost network interface and calculate your multiaddr.
 
-3. Connect to the Redis server at the `REDIS_ADDR` location and set the value
-   for the key `<TEST_KEY>_listener_multiaddr` to your multiaddr value.
+3. Connect to the Redis server at the `REDIS_ADDR` location and push your
+   multiaddr onto the list `<TEST_KEY>_listener_multiaddr` with
+   `RPUSH <TEST_KEY>_listener_multiaddr <multiaddr>`.
+
+   NOTE: The key must be a list, not a string. Every other implementation's
+   dialer reads it with `BLPOP`, which fails with a `WRONGTYPE` error if the
+   listener stored the address with `SET`.
 
    NOTE: The use of the `TEST_KEY` value in the key name effectively namespaces
    the key-value pair used for each test. Since we typically run multiple tests
