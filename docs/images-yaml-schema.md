@@ -114,6 +114,24 @@ Defines libp2p peer implementations to test.
 |-------|------|---------|-------------|
 | `name` | string | `id` | Human-readable name |
 | `dialOnly` | boolean | `false` | Can only dial, not listen (transport only) |
+| `depends` | array | `[]` | IDs of images in the same section that must be built before this one (see [Build order](#build-order)) |
+
+### Build order
+
+Images are built in dependency order. An image's dependencies are the IDs in its `depends` list and, for a browser image, its `source.baseImage`. Each image is built after its dependencies, and a dependency is built even when the `--impl-select` filter does not select it, so selecting only `chromium-js-v3.x` also builds `js-v3.x` first. Images that are already built are skipped, as usual. A `depends` entry that is not an ID in the same section, or a circular dependency, is an error reported before anything is built.
+
+```yaml
+implementations:
+  - id: my-app
+    depends: [my-base]        # my-base is built first
+    source:
+      type: local
+      path: images/my-app
+  - id: my-base
+    source:
+      type: local
+      path: images/my-base
+```
 
 ### Source Configuration
 
@@ -626,7 +644,8 @@ implementations:
 
 - **Local**: `path` must exist, `dockerfile` must be in path
 - **GitHub**: `commit` must be 40-character SHA-1 hash, `repo` must be valid
-- **Browser**: `baseImage` must reference existing implementation ID
+- **Browser**: `baseImage` must reference existing implementation ID (it is built first, see [Build order](#build-order))
+- **depends**: every entry must be an ID in the same section, and the dependencies must not form a cycle
 
 ### Patch File Constraints
 

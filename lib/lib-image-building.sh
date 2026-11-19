@@ -10,7 +10,111 @@ docker_image_exists() {
   docker image inspect "${image_name}" >/dev/null 2>&1
 }
 
+# Print the ids that must be built before the image at <index> of <section>:
+# the optional `depends` list of the image, plus the base image of a browser image
+# (source.baseImage), because a browser image is built on top of it.
+# Usage: get_image_dependencies <section> <index>
+get_image_dependencies() {
+  local section="$1"
+  local index="$2"
+  local base_image
+
+  yq eval "(.${section}[${index}].depends // [])[]" "${IMAGES_YAML}"
+
+  base_image=$(yq eval ".${section}[${index}].source.baseImage // \"\"" "${IMAGES_YAML}")
+  if [ -n "${base_image}" ]; then
+    echo "${base_image}"
+  fi
+}
+
+# Visit one image for ordering: build its dependencies first, then the image itself.
+# Works on the _IMAGE_ORDER_* globals set up by order_images_for_build.
+_visit_image_for_order() {
+  local index="$1"
+  local dependency
+  local dependency_index
+  local j
+
+  case "${_IMAGE_ORDER_STATE[${index}]:-}" in
+    done)
+      return 0
+      ;;
+    visiting)
+      print_error "Circular image dependency involving ${_IMAGE_ORDER_IDS[${index}]} in ${_IMAGE_ORDER_SECTION}"
+      return 1
+      ;;
+  esac
+
+  _IMAGE_ORDER_STATE[${index}]="visiting"
+
+  while IFS= read -r dependency; do
+    [ -z "${dependency}" ] && continue
+
+    dependency_index=-1
+    for ((j=0; j<${#_IMAGE_ORDER_IDS[@]}; j++)); do
+      if [ "${_IMAGE_ORDER_IDS[${j}]}" == "${dependency}" ]; then
+        dependency_index=${j}
+        break
+      fi
+    done
+
+    if [ "${dependency_index}" -lt 0 ]; then
+      print_error "${_IMAGE_ORDER_IDS[${index}]} depends on ${dependency}, which is not in ${_IMAGE_ORDER_SECTION}"
+      return 1
+    fi
+
+    _visit_image_for_order "${dependency_index}" || return 1
+  done < <(get_image_dependencies "${_IMAGE_ORDER_SECTION}" "${index}")
+
+  _IMAGE_ORDER_STATE[${index}]="done"
+  _IMAGE_ORDER_RESULT+=("${index}")
+}
+
+# Print the indexes of the images of <section> to build, one per line, in build order.
+# The images that match <filter> are selected, the images they depend on are added even
+# when the filter does not match them, and every image comes after its dependencies.
+# Usage: order_images_for_build <section> <filter>
+order_images_for_build() {
+  local section="$1"
+  local filter="$2"
+  local id
+  local pattern
+  local match_found
+  local i
+
+  _IMAGE_ORDER_SECTION="${section}"
+  _IMAGE_ORDER_IDS=()
+  _IMAGE_ORDER_STATE=()
+  _IMAGE_ORDER_RESULT=()
+
+  while IFS= read -r id; do
+    _IMAGE_ORDER_IDS+=("${id}")
+  done < <(yq eval ".${section}[].id" "${IMAGES_YAML}")
+
+  for ((i=0; i<${#_IMAGE_ORDER_IDS[@]}; i++)); do
+    match_found=false
+    IFS='|' read -ra FILTER_PATTERNS <<< "${filter}"
+    for pattern in "${FILTER_PATTERNS[@]}"; do
+      case "${_IMAGE_ORDER_IDS[${i}]}" in
+        "${pattern}")
+          match_found=true
+          break
+          ;;
+      esac
+    done
+    if [ "${match_found}" == "true" ]; then
+      _visit_image_for_order "${i}" || return 1
+    fi
+  done
+
+  if [ "${#_IMAGE_ORDER_RESULT[@]}" -gt 0 ]; then
+    printf '%s\n' "${_IMAGE_ORDER_RESULT[@]}"
+  fi
+}
+
 # Helper function to build images from a YAML section (implementations or baselines)
+# Images are built after the images they depend on (see get_image_dependencies), and
+# a dependency is built even when the filter does not select it.
 build_images_from_section() {
   local section="$1"  # "implementations", "baselines", "routers", etc
   local filter="${2:-}" # Optional: pipe-separated filter (e.g., "go-v0.45|rust-v0.56")
@@ -22,28 +126,13 @@ build_images_from_section() {
     return 0
   fi
 
-  local count=$(yq eval ".${section} | length" "${IMAGES_YAML}")
+  local build_order
+  build_order=$(order_images_for_build "${section}" "${filter}") || exit 1
 
-  for ((i=0; i<count; i++)); do
+  local i
+  for i in ${build_order}; do
     local impl_id=$(yq eval ".${section}[$i].id" "${IMAGES_YAML}")
     local source_type=$(yq eval ".${section}[$i].source.type" "${IMAGES_YAML}")
-
-    # Apply filter if specified
-    if [ -n "${filter}" ]; then
-      match_found=false
-      IFS='|' read -ra FILTER_PATTERNS <<< "${filter}"
-      for pattern in "${FILTER_PATTERNS[@]}"; do
-        case "${impl_id}" in
-          "${pattern}")
-            match_found=true
-            break
-            ;;
-        esac
-      done
-      if [ "${match_found}" == "false" ]; then
-        continue
-      fi
-    fi
 
     local image_name=$(get_image_name "${TEST_TYPE}" "${section}" "${impl_id}")
 
