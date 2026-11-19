@@ -52,7 +52,6 @@ lib/
 ├── lib-test-images.sh              # Image management utilities
 │
 ├── test-filter-engine.sh           # Standalone filter engine tests
-├── test-image-build-order.sh       # Image build order tests (needs yq, no Docker)
 └── update-readme-results.sh        # Update README with test results
 ```
 
