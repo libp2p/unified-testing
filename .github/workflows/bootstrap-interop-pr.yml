@@ -1,0 +1,25 @@
+name: Bootstrap Interoperability Tests (PR)
+
+on:
+  pull_request:
+    paths:
+      - 'bootstrap/**'
+      - '.github/actions/run-bash-bootstrap-test/**'
+      - '.github/workflows/bootstrap-interop-pr.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  run-tests:
+    runs-on: [self-hosted, linux, x64, ephemeral]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run bootstrap interop tests
+        uses: ./.github/actions/run-bash-bootstrap-test

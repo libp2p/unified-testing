@@ -1,0 +1,10 @@
+# NOTE: Paths are relative to the bootstrap/ directory. Run via ./run.sh.
+implementations:
+  - id: go
+    imageName: bootstrap-go
+    buildContext: ./images/go
+    dockerfile: Dockerfile
+  - id: py
+    imageName: bootstrap-py
+    buildContext: ./images/py
+    dockerfile: Dockerfile
