@@ -1,0 +1,16 @@
+# NOTE: Paths are relative to the relay/ directory. Run via ./run.sh.
+#
+# Relay (circuit v2) interop: relay × listener × dialer over {go, py}.
+# The listener reserves a slot on the relay; the dialer dials the listener
+# through a p2p-circuit address and verifies an echo stream. All peers share
+# one Docker network (no NAT) — this suite tests relay protocol interop,
+# not hole punching (see hole-punch/ for DCUtR).
+implementations:
+  - id: go
+    imageName: relay-go
+    buildContext: ./images/go
+    dockerfile: Dockerfile
+  - id: py
+    imageName: relay-py
+    buildContext: ./images/py
+    dockerfile: Dockerfile
