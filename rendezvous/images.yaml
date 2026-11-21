@@ -1,0 +1,10 @@
+# NOTE: Paths are relative to the rendezvous/ directory. Run via ./run.sh.
+implementations:
+  - id: go
+    imageName: rendezvous-go
+    buildContext: ./images/go
+    dockerfile: Dockerfile
+  - id: py
+    imageName: rendezvous-py
+    buildContext: ./images/py
+    dockerfile: Dockerfile
