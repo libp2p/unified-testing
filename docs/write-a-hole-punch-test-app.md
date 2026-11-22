@@ -153,8 +153,9 @@ services:
       - TRANSPORT=tcp
       - SECURE_CHANNEL=noise
       - MUXER=yamux
-      - PEER_IP=10.123.45.99
-      - ROUTER_IP=10.123.45.98
+      - DIALER_IP=10.123.45.99
+      - WAN_SUBNET=10.123.45.64/27
+      - WAN_ROUTER_IP=10.123.45.98
       - DEBUG=false
 
   listener:
@@ -174,8 +175,9 @@ services:
       - TRANSPORT=tcp
       - SECURE_CHANNEL=noise
       - MUXER=yamux
-      - PEER_IP=10.123.45.131
-      - ROUTER_IP=10.123.45.130
+      - LISTENER_IP=10.123.45.131
+      - WAN_SUBNET=10.123.45.64/27
+      - WAN_ROUTER_IP=10.123.45.130
       - DEBUG=false
 ```
 
@@ -267,47 +269,58 @@ The typical high-level flow for any `hole-punch` test application is as follows:
 
    ```sh
    IS_DIALER=true
-   PEER_IP=10.123.45.99
-   ROUTER_IP=10.123.45.98
+   DIALER_IP=10.123.45.99
+   WAN_SUBNET=10.123.45.64/27
+   WAN_ROUTER_IP=10.123.45.98
    ```
 
-2. Start your libp2p node listening on `PEER_IP`. Configure your node to:
+2. Add the route to the relay's subnet yourself, before starting your node. The
+   peer containers are not given it:
+
+   ```sh
+   ip route add "${WAN_SUBNET}" via "${WAN_ROUTER_IP}" dev lan0
+   ```
+
+   Your image therefore needs `iproute2` (or an equivalent) installed. See
+   `hole-punch/images/rust/v0.56/run-peer.sh` for a working example.
+
+3. Start your libp2p node listening on `DIALER_IP`. Configure your node to:
    - Enable the DCUtR protocol
    - Enable relay client functionality
    - Use the specified TRANSPORT, SECURE_CHANNEL, and MUXER
 
-3. Connect to the Redis server at `REDIS_ADDR` and poll it for the value
+4. Connect to the Redis server at `REDIS_ADDR` and poll it for the value
    associated with the `<TEST_KEY>_relay_multiaddr` key.
 
-4. Connect to the relay server using the multiaddr from Redis. Establish a
+5. Connect to the relay server using the multiaddr from Redis. Establish a
    relayed connection.
 
-5. Connect to Redis again and poll for the value associated with the
+6. Connect to Redis again and poll for the value associated with the
    `<TEST_KEY>_listener_peer_id` key to get the listener's peer ID.
 
-6. Initiate a connection to the listener through the relay using the listener's
+7. Initiate a connection to the listener through the relay using the listener's
    peer ID. The relay should facilitate the initial connection.
 
-7. Start a timer to measure DCUtR protocol execution time.
+8. Start a timer to measure DCUtR protocol execution time.
 
-8. The DCUtR protocol should automatically attempt to establish a direct
+9. The DCUtR protocol should automatically attempt to establish a direct
    connection by:
    - Exchanging address information through the relay
    - Simultaneously attempting connections from both sides
    - Performing NAT hole punching
 
-9. Wait for the direct connection to be established. Verify that the connection
-   is direct (not relayed).
+10. Wait for the direct connection to be established. Verify that the connection
+    is direct (not relayed).
 
-10. Stop the timer and record the handshake time.
+11. Stop the timer and record the handshake time.
 
-11. Optionally, send a ping or small message over the direct connection to
+12. Optionally, send a ping or small message over the direct connection to
     verify it's working.
 
-12. Print to stdout the results in YAML format (see the section "Results
+13. Print to stdout the results in YAML format (see the section "Results
     Schema" below).
 
-13. Exit cleanly with an exit code of 0. If there are any errors (connection
+14. Exit cleanly with an exit code of 0. If there are any errors (connection
     timeout, DCUtR failure, etc.), exit with a non-zero exit code to signal
     test failure.
 
@@ -319,11 +332,13 @@ The typical high-level flow for any `hole-punch` test application is as follows:
 
    ```sh
    IS_DIALER=false
-   PEER_IP=10.123.45.131
-   ROUTER_IP=10.123.45.130
+   LISTENER_IP=10.123.45.131
+   WAN_SUBNET=10.123.45.64/27
+   WAN_ROUTER_IP=10.123.45.130
    ```
 
-2. Start your libp2p node listening on `PEER_IP`. Configure your node to:
+2. Add the route to the relay's subnet yourself (as the dialer does, above),
+   then start your libp2p node listening on `LISTENER_IP`. Configure your node to:
    - Enable the DCUtR protocol
    - Enable relay client functionality
    - Use the specified TRANSPORT, SECURE_CHANNEL, and MUXER
@@ -367,12 +382,19 @@ Below is an example of a valid results report printed to stdout:
 
 ```yaml
 # Measurements from dialer
-handshakeTime: 1234.56
-unit: ms
+latency:
+  handshake_plus_one_rtt: 1234.56
+  ping_rtt: 12.34
+  unit: ms
 ```
 
-The `handshakeTime` should be the time in milliseconds from when the DCUtR
-protocol started until the direct connection was fully established and verified.
+`handshake_plus_one_rtt` is the time in milliseconds from when the DCUtR protocol
+started until the direct connection was established and verified by one round
+trip; `ping_rtt` is the round-trip time of that ping on its own.
+
+The parser only reads the `latency:` block and those three fields
+(`hole-punch/lib/run-single-test.sh`), so a top-level `handshakeTime` is dropped
+silently and the test reports no measurement.
 
 NOTE: The `hole-punch/lib/run-single-test.sh` script handles adding the metadata
 for the results file in each test. It writes out something like the following
