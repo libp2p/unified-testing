@@ -20,6 +20,7 @@ The goal is to verify relay interop across language stacks on the full relay →
 
 - **go** — go-libp2p v0.34.1 (`relay-go`)
 - **py** — py-libp2p from `libp2p/py-libp2p@main` (`relay-py`)
+- **minip2p** — [minip2p](https://github.com/deepso7/minip2p), a sans-I/O Rust implementation (`relay-minip2p`)
 
 ## Test Naming
 
@@ -49,7 +50,7 @@ This test verifies: *Can a Go node reach a Python listener through a Go relay?*
 number of tests = N³
 ```
 
-where `N` is the number of implementations (currently 2 → 8 tests).
+where `N` is the number of implementations (currently 3 → 27 tests).
 
 ## Running
 
