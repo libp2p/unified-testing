@@ -1,0 +1,25 @@
+name: mDNS Interoperability Tests (PR)
+
+on:
+  pull_request:
+    paths:
+      - 'mdns/**'
+      - '.github/actions/run-bash-mdns-test/**'
+      - '.github/workflows/mdns-interop-pr.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  run-tests:
+    runs-on: [self-hosted, linux, x64, ephemeral]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run mdns interop tests
+        uses: ./.github/actions/run-bash-mdns-test

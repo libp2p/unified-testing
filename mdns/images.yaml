@@ -1,0 +1,10 @@
+# NOTE: Paths are relative to the mdns/ directory. Run via ./run.sh.
+implementations:
+  - id: go
+    imageName: mdns-go
+    buildContext: ./images/go
+    dockerfile: Dockerfile
+  - id: py
+    imageName: mdns-py
+    buildContext: ./images/py
+    dockerfile: Dockerfile
