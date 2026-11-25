@@ -26,6 +26,6 @@ implementations:
     imageName: kad-dht-haskell
     source:
       type: github
-      repo: adust09/libp2p-hs
+      repo: adust09/hs-libp2p
       commit: 25cf16e343035134ebb297c0d4189862965b9dc1
       dockerfile: interop/kad-dht-node/Dockerfile

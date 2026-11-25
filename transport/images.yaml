@@ -342,7 +342,7 @@ implementations:
   - id: haskell-v0.1
     source:
       type: github
-      repo: adust09/libp2p-hs
+      repo: adust09/hs-libp2p
       commit: 87b4b0b7a01cddefa294a651dc98a872a21bf66f
       dockerfile: Dockerfile
     transports: [tcp]
