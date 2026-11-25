@@ -182,6 +182,15 @@ extract_github_snapshot() {
 
   local extracted_dir="${work_dir}/${repo_name}-${commit}"
   if [ ! -d "${extracted_dir}" ]; then
+    # GitHub names the top directory after the repo's current name, so after a
+    # rename (or with a snapshot cached before one) it differs from repo_name.
+    # Accept the single <name>-<commit> directory and move it into place.
+    local found=("${work_dir}"/*-"${commit}")
+    if [ "${#found[@]}" -eq 1 ] && [ -d "${found[0]}" ]; then
+      mv "${found[0]}" "${extracted_dir}"
+    fi
+  fi
+  if [ ! -d "${extracted_dir}" ]; then
     print_error "Expected directory not found: ${extracted_dir}"
     rm -rf "${work_dir}"
     unindent
