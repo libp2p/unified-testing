@@ -14,3 +14,14 @@ implementations:
     imageName: relay-py
     buildContext: ./images/py
     dockerfile: Dockerfile
+  # The app is in deepso7/minip2p (tests/interop/unified-testing, binary
+  # minip2p-relay-interop); build-images.sh vendors it into ./images/minip2p/minip2p.
+  - id: minip2p
+    imageName: relay-minip2p
+    buildContext: ./images/minip2p
+    dockerfile: Dockerfile
+    source:
+      type: github
+      repo: deepso7/minip2p
+      commit: a8e59880fa056616544d429e4e9b2f534fbe9360
+      vendorDir: minip2p
