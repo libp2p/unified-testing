@@ -146,6 +146,7 @@ runs:
         if-no-files-found: warn
 
     - name: Upload snapshot archive
+      id: upload-snapshot
       if: always() && inputs.snapshot == 'true'
       uses: actions/upload-artifact@v4
       with:
@@ -153,6 +154,14 @@ runs:
         path: |
           ${{ steps.find-test-pass.outputs.test-pass-dir }}
         if-no-files-found: error
+
+    - name: Remove exported Docker images from the runner
+      # The snapshot artifact uploaded above already contains them. Kept on
+      # the self-hosted runner they add ~3 GB per scheduled run under
+      # /srv/cache/test-run, which filled its disk (Sep-Nov 2026).
+      if: always() && steps.upload-snapshot.outcome == 'success' && inputs.export-docker-images == 'true'
+      shell: bash
+      run: rm -rf "${{ steps.find-test-pass.outputs.test-pass-dir }}/docker-images"
 
     - name: Fail if tests failed
       if: always()
