@@ -14,4 +14,7 @@ ENV CI=true
 RUN npm ci
 RUN npm run build
 
+# Node.js can munge SDP, so the default WebRTC Direct dialer uses v1
+ENV EXPECT_WEBRTC_DIRECT_VERSION=1
+
 ENTRYPOINT ["npm", "test", "--", "-t", "node", "--", "--exit"]

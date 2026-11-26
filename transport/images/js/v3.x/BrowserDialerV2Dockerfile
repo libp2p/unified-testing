@@ -1,0 +1,22 @@
+# Browser dialer that forces WebRTC Direct v2, for browsers that still allow
+# SDP munging (and so would otherwise dial v1). Chromium with munging disabled
+# is covered by ChromiumNoSdpMangleUfragDockerfile.
+
+# Workaround: https://github.com/docker/cli/issues/996
+ARG BASE_IMAGE=node-js-libp2p-head
+FROM ${BASE_IMAGE}
+
+WORKDIR /app
+
+# Set by images.yaml: firefox or webkit (Chromium v2 is covered by
+# ChromiumNoSdpMangleUfragDockerfile)
+ARG BROWSER=firefox
+ENV BROWSER=${BROWSER}
+
+# See BrowserDockerfile: install the browser for the pinned playwright-core
+RUN npx --no-install playwright-core install --with-deps $BROWSER
+
+ENV WEBRTC_DIRECT_DIALER_VERSION=2
+ENV EXPECT_WEBRTC_DIRECT_VERSION=2
+
+ENTRYPOINT ["sh", "-c", "npm test -- -t browser -- --browser \"$BROWSER\""]

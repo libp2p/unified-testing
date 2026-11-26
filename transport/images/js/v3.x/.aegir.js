@@ -7,13 +7,26 @@ import { createClient } from 'redis'
 // Note: These are validated in the before() hook, not at module load time,
 // because .aegir.js is loaded during Docker build when env vars aren't set yet
 
+// Extra Chromium command line flags, set by ChromiumNoSdpMangleUfragDockerfile.
+// They are passed as launch args to whichever browser runs, so only set them
+// in a Chromium image.
+const chromiumFlags = (process.env.CHROMIUM_FLAGS ?? '').split(/\s+/).filter(Boolean)
+
 /** @type {import('aegir/types').PartialOptions} */
 export default {
   test: {
     browser: {
       config: {
-        // Ignore self signed certificates
-        browserContextOptions: { ignoreHTTPSErrors: true }
+        browserContextOptions: {
+          // Ignore self signed certificates
+          ignoreHTTPSErrors: true,
+          // playwright-test (14.x) spreads browserContextOptions into
+          // launchPersistentContext, so launch `args` work here. They replace
+          // its own args (only set with --debug or extensions) and would be
+          // ignored in --incognito mode, which uses newContext. The dialer
+          // test checks the WebRTC Direct version, so a dropped flag fails.
+          ...(chromiumFlags.length > 0 ? { args: chromiumFlags } : {})
+        }
       }
     },
     async before () {

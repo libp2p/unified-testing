@@ -1,0 +1,20 @@
+# Chromium with SDP munging of the ICE ufrag/pwd disabled, as Chrome may ship it
+# (https://github.com/libp2p/specs/issues/672). WebRTC Direct v1 needs that
+# munging, so js-libp2p falls back from v1 to v2.
+
+# Workaround: https://github.com/docker/cli/issues/996
+ARG BASE_IMAGE=node-js-libp2p-head
+FROM ${BASE_IMAGE}
+
+WORKDIR /app
+
+ENV BROWSER=chromium
+
+# See BrowserDockerfile: install the browser for the pinned playwright-core
+RUN npx --no-install playwright-core install --with-deps chromium
+
+ENV CHROMIUM_FLAGS=--force-fieldtrials=WebRTC-NoSdpMangleUfrag/Enabled/
+# fails the dial test if the flag is not applied and the dial stays on v1
+ENV EXPECT_WEBRTC_DIRECT_VERSION=2
+
+ENTRYPOINT ["sh", "-c", "npm test -- -t browser -- --browser \"$BROWSER\""]

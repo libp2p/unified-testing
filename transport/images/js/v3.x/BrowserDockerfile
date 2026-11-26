@@ -9,7 +9,16 @@ ARG BROWSER=chromium
 ENV BROWSER=${BROWSER}
 
 # Install Playwright browser at build time so it's not done during test run.
-# Using 'playwright install' avoids loading the test suite (and get-libp2p.ts) during build.
-RUN npx playwright install --with-deps $BROWSER
+# Use the playwright-core from package-lock.json (the one aegir's test runner
+# loads): a bare `npx playwright` fetches the latest Playwright from npm and
+# installs a browser build the pinned runner can't use, so the runner then
+# tries to download its own at test time.
+RUN npx --no-install playwright-core install --with-deps $BROWSER
+
+# Chromium, Firefox and WebKit (as built for this playwright-core) apply munged
+# SDP, so the default WebRTC Direct dialer uses v1.
+# If a browser update stops allowing munging, webrtc-direct dials fail here
+# instead of silently testing v2.
+ENV EXPECT_WEBRTC_DIRECT_VERSION=1
 
 ENTRYPOINT ["sh", "-c", "npm test -- -t browser -- --browser \"$BROWSER\""]

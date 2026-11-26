@@ -7,19 +7,19 @@ test-aliases:
   - alias: "all"
     value: "~browsers|~rust|~go|~python|~js|~nim|~jvm|~c|~dotnet|~zig|~eth-p2p|~lua|~haskell"
   - alias: "browsers"
-    value: "chromium-rust-v0.53|chromium-rust-v0.54|chromium-rust-v0.56|chromium-js-v1.x|chromium-js-v2.x|firefox-js-v1.x|firefox-js-v2.x|webkit-js-v1.x|webkit-js-v2.x"
+    value: "chromium-rust-v0.53|chromium-rust-v0.54|chromium-rust-v0.56|chromium-js-v1.x|chromium-js-v2.x|chromium-js-v3.x|chromium-js-v3.x-no-sdp-mangle-ufrag|firefox-js-v1.x|firefox-js-v2.x|firefox-js-v3.x|webkit-js-v1.x|webkit-js-v2.x|webkit-js-v3.x|firefox-js-v3.x-webrtc-direct-v2|webkit-js-v3.x-webrtc-direct-v2"
   - alias: "rust-browsers"
     value: "chromium-rust-v0.53|chromium-rust-v0.54"
   - alias: "js-browsers"
-    value: "chromium-js-v1.x|chromium-js-v2.x|firefox-js-v1.x|firefox-js-v2.x|webkit-js-v1.x|webkit-js-v2.x"
+    value: "chromium-js-v1.x|chromium-js-v2.x|chromium-js-v3.x|chromium-js-v3.x-no-sdp-mangle-ufrag|firefox-js-v1.x|firefox-js-v2.x|firefox-js-v3.x|webkit-js-v1.x|webkit-js-v2.x|webkit-js-v3.x|firefox-js-v3.x-webrtc-direct-v2|webkit-js-v3.x-webrtc-direct-v2"
   - alias: "rust"
     value: "rust-v0.53|rust-v0.54|rust-v0.55|rust-v0.56"
   - alias: "go"
-    value: "go-v0.38|go-v0.39|go-v0.40|go-v0.41|go-v0.42|go-v0.43|go-v0.44|go-v0.45|go-v0.46|go-v0.47-pre|go-v0.47|go-v0.48|go-v0.49|go-v0.50|go-v0.51|go-v0.52"
+    value: "go-v0.38|go-v0.39|go-v0.40|go-v0.41|go-v0.42|go-v0.43|go-v0.44|go-v0.45|go-v0.46|go-v0.47-pre|go-v0.47|go-v0.48|go-v0.49|go-v0.50|go-v0.51|go-v0.52|go-v0.52-webrtc-direct-v2"
   - alias: "python"
     value: "python-v0.x"
   - alias: "js"
-    value: "js-v1.x|js-v2.x|js-v3.x"
+    value: "js-v1.x|js-v2.x|js-v3.x|js-v3.x-webrtc-direct-v2"
   - alias: "nim"
     value: "nim-v2.2.0"
   - alias: "haskell"
@@ -36,8 +36,20 @@ test-aliases:
     value: "eth-p2p-z-v0.0.1|eth-p2p-z-v0.0.2"
   - alias: "lua"
     value: "lua-v0.1.0"
-  - alias: "failing" # everything except rust-v0.56 and js and python-v0.x implementations as of 25 Jan 2026
-    value: "~browsers|go-v0.38|go-v0.39|go-v0.40|go-v0.41|go-v0.42|go-v0.43|go-v0.44|go-v0.45|go-v0.46|go-v0.47-pre|go-v0.47|go-v0.48|go-v0.49|go-v0.50|go-v0.51|go-v0.52|~jvm|~c|~dotnet|~zig|eth-p2p-z-v0.0.1|rust-v0.53|rust-v0.54|rust-v0.55|lua-v0.1.0 x python-v0.x|js-v1.x"
+  # Known-failing tests, ignored by the PR and daily runs. Entries match as
+  # substrings of test names ("dialer x listener (transport, ...)"), so an ID
+  # here also hides tests for IDs that contain it (js-v3.x would hide
+  # js-v3.x-webrtc-direct-v2).
+  # The WebRTC Direct v2 dialers (*-webrtc-direct-v2,
+  # chromium-js-v3.x-no-sdp-mangle-ufrag) cannot connect to v1-only listeners
+  # (go-v0.48 and older, rust-v0.53..v0.55: the webrtc-direct listeners without
+  # v2 support). Those are ignored as a whole here;
+  # if one is removed, add "<v2 dialer> x <listener>" entries for it.
+  # "webkit-js-v3.x x firefox-js-v3.x (webrtc)" (browser to browser through a
+  # relay) is flaky: WebKit's data channel sometimes fails to send (2 of 4 local
+  # runs, 26 Nov 2026).
+  - alias: "failing"
+    value: "chromium-rust-v0.53|chromium-rust-v0.54|chromium-rust-v0.56|chromium-js-v1.x|chromium-js-v2.x|firefox-js-v1.x|firefox-js-v2.x|webkit-js-v1.x|webkit-js-v2.x|go-v0.38|go-v0.39|go-v0.40|go-v0.41|go-v0.42|go-v0.43|go-v0.44|go-v0.45|go-v0.46|go-v0.47-pre|go-v0.47|go-v0.48|~jvm|~c|~dotnet|~zig|eth-p2p-z-v0.0.1|rust-v0.53|rust-v0.54|rust-v0.55|lua-v0.1.0 x python-v0.x|js-v1.x|webkit-js-v3.x x firefox-js-v3.x (webrtc)"
 
 implementations:
   # Leanp2p implementations
@@ -272,6 +284,23 @@ implementations:
     secureChannels: [tls, noise]
     muxers: [yamux]
 
+  # go-v0.52 dialer forced to WebRTC Direct v2 (WithDialerVersion(2)); go-libp2p
+  # dials v1 by default and its listeners accept both. The patch is
+  # images/go/v0.49/transport-fix.patch plus the WithDialerVersion line; keep
+  # the two in step.
+  - id: go-v0.52-webrtc-direct-v2
+    source:
+      type: github
+      repo: libp2p/go-libp2p
+      commit: ca96fd813d33c56dc2168459c10fdfb884640147
+      dockerfile: test-plans/PingDockerfile
+      patchPath: images/go/v0.52-webrtc-direct-v2
+      patchFile: transport-fix.patch
+    transports: [webrtc-direct]
+    secureChannels: []
+    muxers: []
+    dialOnly: [webrtc-direct]
+
   # Python implementation
   - id: python-v0.x
     source:
@@ -322,10 +351,22 @@ implementations:
       type: local
       path: images/js/v3.x
       dockerfile: Dockerfile
-    transports: [tcp, ws, wss]
+    transports: [tcp, ws, wss, webrtc-direct]
     secureChannels: [noise]
     muxers: [mplex, yamux]
     dialOnly: [wss]
+
+  # js-v3.x Node.js dialer forced to WebRTC Direct v2 (dial only; the js-v3.x
+  # listener accepts v1 and v2)
+  - id: js-v3.x-webrtc-direct-v2
+    source:
+      type: local
+      path: images/js/v3.x
+      dockerfile: DialerV2Dockerfile
+    transports: [webrtc-direct]
+    secureChannels: []
+    muxers: []
+    dialOnly: [webrtc-direct]
 
   # Nim implementation
   - id: nim-v2.2.0
@@ -487,6 +528,77 @@ implementations:
     secureChannels: [noise]
     muxers: [mplex, yamux]
     dialOnly: [wss, webrtc-direct]
+
+  - id: chromium-js-v3.x
+    source:
+      type: browser
+      baseImage: js-v3.x
+      browser: chromium
+      dockerfile: images/js/v3.x/BrowserDockerfile
+    transports: [webtransport, wss, webrtc-direct, webrtc]
+    secureChannels: [noise]
+    muxers: [mplex, yamux]
+    dialOnly: [webtransport, wss, webrtc-direct]
+
+  # Chromium with ICE ufrag/pwd SDP munging disabled, as Chrome may ship it
+  # (libp2p/specs#672). WebRTC Direct v1 needs munging, so js-libp2p falls back
+  # from v1 to v2.
+  - id: chromium-js-v3.x-no-sdp-mangle-ufrag
+    source:
+      type: browser
+      baseImage: js-v3.x
+      browser: chromium
+      dockerfile: images/js/v3.x/ChromiumNoSdpMangleUfragDockerfile
+    transports: [webrtc-direct]
+    secureChannels: []
+    muxers: []
+    dialOnly: [webrtc-direct]
+
+  - id: firefox-js-v3.x
+    source:
+      type: browser
+      baseImage: js-v3.x
+      browser: firefox
+      dockerfile: images/js/v3.x/BrowserDockerfile
+    transports: [webtransport, wss, webrtc-direct, webrtc]
+    secureChannels: [noise]
+    muxers: [mplex, yamux]
+    dialOnly: [webtransport, wss, webrtc-direct]
+
+  - id: webkit-js-v3.x
+    source:
+      type: browser
+      baseImage: js-v3.x
+      browser: webkit
+      dockerfile: images/js/v3.x/BrowserDockerfile
+    transports: [wss, webrtc-direct, webrtc]
+    secureChannels: [noise]
+    muxers: [mplex, yamux]
+    dialOnly: [wss, webrtc-direct]
+
+  # Firefox and WebKit allow SDP munging, so they dial WebRTC Direct v1 by
+  # default; these force v2
+  - id: firefox-js-v3.x-webrtc-direct-v2
+    source:
+      type: browser
+      baseImage: js-v3.x
+      browser: firefox
+      dockerfile: images/js/v3.x/BrowserDialerV2Dockerfile
+    transports: [webrtc-direct]
+    secureChannels: []
+    muxers: []
+    dialOnly: [webrtc-direct]
+
+  - id: webkit-js-v3.x-webrtc-direct-v2
+    source:
+      type: browser
+      baseImage: js-v3.x
+      browser: webkit
+      dockerfile: images/js/v3.x/BrowserDialerV2Dockerfile
+    transports: [webrtc-direct]
+    secureChannels: []
+    muxers: []
+    dialOnly: [webrtc-direct]
 
   # Rust browser implementations
   - id: chromium-rust-v0.53
