@@ -2,7 +2,7 @@
 /* eslint-env mocha */
 
 import { multiaddr } from '@multiformats/multiaddr'
-import { getLibp2p } from './fixtures/get-libp2p.js'
+import { getLibp2p, getWebRTCDirectDialedVersion } from './fixtures/get-libp2p.js'
 import { redisProxy } from './fixtures/redis-proxy.js'
 import type { Libp2p } from '@libp2p/interface'
 import type { Ping } from '@libp2p/ping'
@@ -81,6 +81,22 @@ describe('ping test (dialer)', function () {
       signal: AbortSignal.timeout(timeoutMs)
     })
     const handshakePlusOneRTT = Date.now() - handshakeStartInstant
+
+    // Images set the WebRTC Direct version they are meant to exercise, so a
+    // dial that used the other version fails rather than passing. Every
+    // js-v3.x image sets it, so a missing value is a configuration error.
+    if (process.env.TRANSPORT === 'webrtc-direct') {
+      const expectedVersion = process.env.EXPECT_WEBRTC_DIRECT_VERSION
+      if (expectedVersion == null || expectedVersion === '') {
+        throw new Error('EXPECT_WEBRTC_DIRECT_VERSION must be set for webrtc-direct dialers')
+      }
+      const dialedVersion = getWebRTCDirectDialedVersion()
+      if (String(dialedVersion) !== expectedVersion) {
+        throw new Error(`Expected WebRTC Direct v${expectedVersion} but the dial used ${dialedVersion == null ? 'an unknown version' : `v${dialedVersion}`}`)
+      }
+      console.error(`node ${node.peerId.toString()} dialed WebRTC Direct v${dialedVersion}`)
+    }
+
     // Output YAML format as specified in transport test framework
     console.log('latency:')
     console.log(`  handshake_plus_one_rtt: ${handshakePlusOneRTT}`)

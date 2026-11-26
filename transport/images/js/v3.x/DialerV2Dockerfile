@@ -1,0 +1,23 @@
+# Node.js dialer that forces WebRTC Direct v2, so v2 is exercised outside the
+# browser too. Built from the js-v3.x sources; it only dials, and the js-v3.x
+# listener accepts both versions. Keep in step with Dockerfile: the steps up to
+# the build are identical, so the two images share those layers.
+FROM mcr.microsoft.com/playwright:v1.55.0
+
+WORKDIR /app
+
+COPY package*.json .aegir.js tsconfig.json ./
+COPY src ./src
+COPY test ./test
+
+# disable colored output and CLI animation from test runners
+ENV CI=true
+
+# install inside the container so any native deps will have the docker arch
+RUN npm ci
+RUN npm run build
+
+ENV WEBRTC_DIRECT_DIALER_VERSION=2
+ENV EXPECT_WEBRTC_DIRECT_VERSION=2
+
+ENTRYPOINT ["npm", "test", "--", "-t", "node", "--", "--exit"]
