@@ -508,7 +508,10 @@ summary:
 tests:
   - name: "rust-v0.56 x rust-v0.56 (tcp, noise, yamux) [dr: linux, rly: rust-v0.56, lr: linux]"
     status: pass
-    handshakeTime: 1234.56
+    latency:
+      handshake_plus_one_rtt: 1234.56
+      ping_rtt: 12.34
+      unit: ms
     dialerRouter: linux
     listenerRouter: linux
     relay: rust-v0.56
@@ -526,7 +529,9 @@ tests:
 - `fail`: Hole punch failed, timeout, or protocol error
 
 **Timing values** (in milliseconds):
-- `handshakeTime`: Time to establish direct connection through NAT
+- `latency.handshake_plus_one_rtt`: from the dialer starting its circuit dial to
+  the direct connection being established, plus one ping round trip over it
+- `latency.ping_rtt`: one ping round trip over the direct connection
 
 **Test name format**: Includes all network components:
 - Format: `dialer x listener (transport, secure, muxer) [dr: router, rly: relay, lr: router]`

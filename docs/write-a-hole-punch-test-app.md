@@ -95,14 +95,17 @@ services:
         ipv4_address: 10.123.45.68
       hole-punch-network:
     environment:
-      - IS_RELAY=true
       - REDIS_ADDR=hole-punch-redis:6379
       - TEST_KEY=a5b50d5e
       - TRANSPORT=tcp
+      - RELAY_IP=10.123.45.68
+      - DIALER_LAN_SUBNET=10.123.45.96/27
+      - DIALER_ROUTER_IP=10.123.45.66
+      - LISTENER_LAN_SUBNET=10.123.45.128/27
+      - LISTENER_ROUTER_IP=10.123.45.67
+      - DEBUG=false
       - SECURE_CHANNEL=noise
       - MUXER=yamux
-      - RELAY_IP=10.123.45.68
-      - DEBUG=false
 
   dialer-router:
     image: hole-punch-linux-router
@@ -151,11 +154,12 @@ services:
       - REDIS_ADDR=hole-punch-redis:6379
       - TEST_KEY=a5b50d5e
       - TRANSPORT=tcp
+      - DIALER_IP=10.123.45.99
+      - WAN_SUBNET=10.123.45.64/27
+      - WAN_ROUTER_IP=10.123.45.98
+      - DEBUG=false
       - SECURE_CHANNEL=noise
       - MUXER=yamux
-      - PEER_IP=10.123.45.99
-      - ROUTER_IP=10.123.45.98
-      - DEBUG=false
 
   listener:
     image: hole-punch-rust-v0.56
@@ -172,11 +176,12 @@ services:
       - REDIS_ADDR=hole-punch-redis:6379
       - TEST_KEY=a5b50d5e
       - TRANSPORT=tcp
+      - LISTENER_IP=10.123.45.131
+      - WAN_SUBNET=10.123.45.64/27
+      - WAN_ROUTER_IP=10.123.45.130
+      - DEBUG=false
       - SECURE_CHANNEL=noise
       - MUXER=yamux
-      - PEER_IP=10.123.45.131
-      - ROUTER_IP=10.123.45.130
-      - DEBUG=false
 ```
 
 When `docker compose` is executed, it brings up all five containers with their
@@ -207,7 +212,6 @@ The typical high-level flow for any `hole-punch` test application is as follows:
    ```sh
    DEBUG=false                       # boolean value, either true or false
    IS_DIALER=true                    # boolean value, either true or false (not set for relay)
-   IS_RELAY=true                     # boolean value, only set for relay server
    REDIS_ADDR=hole-punch-redis:6379  # URL and port: hole-punch-redis:6379
    TEST_KEY=a5b50d5e                 # 8-character hexadecimal string
    TRANSPORT=tcp                     # transport name: tcp, quic-v1, ws, webrtc-direct, etc
@@ -226,8 +230,10 @@ The typical high-level flow for any `hole-punch` test application is as follows:
    This is to signal to the test applications to generate verbose logging for
    debug purposes.
 
-2. If `IS_RELAY` is true, run the `relay` code. Else if `IS_DIALER` is true,
-   run the `dialer` code, else run the `listener` code (see below).
+2. The relay is a separate image, listed under `relays:` in
+   `hole-punch/images.yaml`, so it always runs the `relay` code. A peer image
+   runs the `dialer` code if `IS_DIALER` is true, else the `listener` code (see
+   below).
 
 ### `relay` Application Flow
 
@@ -235,9 +241,24 @@ The typical high-level flow for any `hole-punch` test application is as follows:
    following environment variables:
 
    ```sh
-   IS_RELAY=true
    RELAY_IP=10.123.45.68
+   DIALER_LAN_SUBNET=10.123.45.96/27
+   DIALER_ROUTER_IP=10.123.45.66
+   LISTENER_LAN_SUBNET=10.123.45.128/27
+   LISTENER_ROUTER_IP=10.123.45.67
    ```
+
+   The relay sits on the WAN network only, so before anything else it must add
+   routes to both LAN subnets through their routers' WAN addresses. The
+   container has `NET_ADMIN`, and the WAN interface is named `wan0`:
+
+   ```sh
+   ip route add "${DIALER_LAN_SUBNET}" via "${DIALER_ROUTER_IP}" dev wan0
+   ip route add "${LISTENER_LAN_SUBNET}" via "${LISTENER_ROUTER_IP}" dev wan0
+   ```
+
+   The image needs `iproute2` for this. The rust relay does it in
+   `hole-punch/images/rust/v0.56/run-relay.sh`.
 
 2. Start the relay server and listen on the `RELAY_IP` address on the WAN
    network.
@@ -267,11 +288,26 @@ The typical high-level flow for any `hole-punch` test application is as follows:
 
    ```sh
    IS_DIALER=true
-   PEER_IP=10.123.45.99
-   ROUTER_IP=10.123.45.98
+   DIALER_IP=10.123.45.99
+   WAN_SUBNET=10.123.45.64/27
+   WAN_ROUTER_IP=10.123.45.98
    ```
 
-2. Start your libp2p node listening on `PEER_IP`. Configure your node to:
+   Each peer sits on its own LAN behind a NAT router, so before anything else
+   it must route the WAN subnet through that router. The container has
+   `NET_ADMIN`, and the LAN interface is named `lan0`:
+
+   ```sh
+   ip route add "${WAN_SUBNET}" via "${WAN_ROUTER_IP}" dev lan0
+   ```
+
+   The image needs `iproute2` for this. The rust peer does it in
+   `hole-punch/images/rust/v0.56/run-peer.sh`.
+
+2. Start your libp2p node listening on `DIALER_IP`, not `0.0.0.0`: the peers
+   are also both attached to `hole-punch-network` (interface `redis0`), a flat
+   path with no NAT, and a connection over it would pass without punching
+   anything. Configure your node to:
    - Enable the DCUtR protocol
    - Enable relay client functionality
    - Use the specified TRANSPORT, SECURE_CHANNEL, and MUXER
@@ -285,29 +321,28 @@ The typical high-level flow for any `hole-punch` test application is as follows:
 5. Connect to Redis again and poll for the value associated with the
    `<TEST_KEY>_listener_peer_id` key to get the listener's peer ID.
 
-6. Initiate a connection to the listener through the relay using the listener's
-   peer ID. The relay should facilitate the initial connection.
+6. Start a timer, then initiate a connection to the listener through the relay
+   (`<relay multiaddr>/p2p-circuit/p2p/<listener peer id>`). The timer covers
+   the circuit dial and the whole DCUtR upgrade.
 
-7. Start a timer to measure DCUtR protocol execution time.
-
-8. The DCUtR protocol should automatically attempt to establish a direct
+7. The DCUtR protocol should automatically attempt to establish a direct
    connection by:
    - Exchanging address information through the relay
    - Simultaneously attempting connections from both sides
    - Performing NAT hole punching
 
-9. Wait for the direct connection to be established. Verify that the connection
+8. Wait for the direct connection to be established. Verify that the connection
    is direct (not relayed).
 
-10. Stop the timer and record the handshake time.
+9. Stop the timer when the direct connection is established.
 
-11. Optionally, send a ping or small message over the direct connection to
-    verify it's working.
+10. Send a ping over the direct connection and record its round-trip time. The
+    results are reported only once this ping succeeds.
 
-12. Print to stdout the results in YAML format (see the section "Results
+11. Print to stdout the results in YAML format (see the section "Results
     Schema" below).
 
-13. Exit cleanly with an exit code of 0. If there are any errors (connection
+12. Exit cleanly with an exit code of 0. If there are any errors (connection
     timeout, DCUtR failure, etc.), exit with a non-zero exit code to signal
     test failure.
 
@@ -319,11 +354,23 @@ The typical high-level flow for any `hole-punch` test application is as follows:
 
    ```sh
    IS_DIALER=false
-   PEER_IP=10.123.45.131
-   ROUTER_IP=10.123.45.130
+   LISTENER_IP=10.123.45.131
+   WAN_SUBNET=10.123.45.64/27
+   WAN_ROUTER_IP=10.123.45.130
    ```
 
-2. Start your libp2p node listening on `PEER_IP`. Configure your node to:
+   Each peer sits on its own LAN behind a NAT router, so before anything else
+   it must route the WAN subnet through that router. The container has
+   `NET_ADMIN`, and the LAN interface is named `lan0`:
+
+   ```sh
+   ip route add "${WAN_SUBNET}" via "${WAN_ROUTER_IP}" dev lan0
+   ```
+
+   The image needs `iproute2` for this. The rust peer does it in
+   `hole-punch/images/rust/v0.56/run-peer.sh`.
+
+2. Start your libp2p node listening on `LISTENER_IP`. Configure your node to:
    - Enable the DCUtR protocol
    - Enable relay client functionality
    - Use the specified TRANSPORT, SECURE_CHANNEL, and MUXER
@@ -366,13 +413,21 @@ consolidation into the global results.yaml file for the full test run.
 Below is an example of a valid results report printed to stdout:
 
 ```yaml
-# Measurements from dialer
-handshakeTime: 1234.56
-unit: ms
+latency:
+  handshake_plus_one_rtt: 1234.56
+  ping_rtt: 12.34
+  unit: ms
 ```
 
-The `handshakeTime` should be the time in milliseconds from when the DCUtR
-protocol started until the direct connection was fully established and verified.
+- `handshake_plus_one_rtt`: the timer from step 6 of the `dialer` flow (circuit
+  dial through the direct connection being established) plus `ping_rtt`.
+- `ping_rtt`: the round-trip time of one ping over the direct connection.
+- `unit`: always `ms`.
+
+`hole-punch/lib/run-single-test.sh` keeps only the `latency:` line and the
+three keys under it, indented by exactly two spaces. Any other stdout line is
+dropped, so a differently named key is lost without an error and the test still
+passes on its exit code alone.
 
 NOTE: The `hole-punch/lib/run-single-test.sh` script handles adding the metadata
 for the results file in each test. It writes out something like the following
